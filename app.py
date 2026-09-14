@@ -1,13 +1,17 @@
 import streamlit as st
 import requests
 import folium
+import math
+import time
+from datetime import datetime, timedelta
+
 from streamlit_folium import st_folium
 from streamlit_js_eval import streamlit_js_eval
-from datetime import datetime
+
 
 # ============================================================
-# AI PERSONAL WEATHER ADVISOR
-# WORLDWIDE LOCATION + LIVE GPS
+# WEATHER AGENT
+# Personal Weather + Route Weather Intelligence
 # ============================================================
 
 st.set_page_config(
@@ -17,677 +21,180 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+
 # ============================================================
 # THEME / CSS
 # ============================================================
 
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-:root {
-    --navy: #123B6D;
-    --blue: #218BE6;
-    --blue-dark: #1769D0;
-    --sky: #EAF6FF;
-    --page: #F5FAFE;
-    --text: #14532D;
-    --text2: #2F6B46;
-    --muted: #6B7F73;
-    --border: #D5E8F6;
-    --white: #FFFFFF;
-}
-
-html, body, .stApp, [data-testid="stAppViewContainer"],
-[data-testid="stHeader"], section.main {
-    font-family: 'Inter', sans-serif !important;
-}
-
-html, body {
-    background: #F5FAFE !important;
-    color: #14532D !important;
-    color-scheme: light !important;
-}
-
-.stApp {
-    background:
-        radial-gradient(circle at 5% 0%, rgba(72, 169, 238, .18), transparent 25%),
-        radial-gradient(circle at 95% 5%, rgba(111, 196, 255, .14), transparent 25%),
-        linear-gradient(180deg, #EAF6FF 0%, #F6FBFF 45%, #FFFFFF 100%) !important;
-    color: #14532D !important;
-}
-
-[data-testid="stAppViewContainer"] {
-    background: transparent !important;
-}
-
-section.main {
-    background: transparent !important;
-}
-
-[data-testid="stHeader"] {
-    background: transparent !important;
-}
-
-.block-container {
-    max-width: 1480px !important;
-    padding: 1.25rem 2rem 2.5rem !important;
-}
-
-.stApp p,
-.stApp label,
-.stApp span,
-.stApp div,
-.stApp li,
-.stApp h1,
-.stApp h2,
-.stApp h3,
-.stApp h4,
-.stApp h5,
-.stApp h6 {
-    font-family: 'Inter', sans-serif;
-}
-
-[data-testid="stWidgetLabel"] p,
-[data-testid="stWidgetLabel"] label {
-    color: #245C3A !important;
-}
-
-/* HERO */
-
-.hero {
-    position: relative;
-    overflow: hidden;
-    padding: 28px 32px;
-    border-radius: 28px;
-    margin-bottom: 18px;
-    background: linear-gradient(135deg, #FFFFFF 0%, #E7F5FF 100%);
-    border: 1px solid #C9E3F4;
-    box-shadow: 0 14px 38px rgba(33, 112, 169, .10);
-}
-
-.hero:after {
-    content: "☁️   ☀️   ☁️";
-    position: absolute;
-    right: 28px;
-    top: 12px;
-    font-size: 42px;
-    opacity: .23;
-    letter-spacing: 10px;
-}
-
-.hero-title {
-    color: #166534 !important;
-    font-size: clamp(30px, 4vw, 48px);
-    line-height: 1.05;
-    font-weight: 800;
-    letter-spacing: -1.5px;
-    margin: 0 !important;
-}
-
-.hero-subtitle {
-    color: #557B67 !important;
-    font-size: 16px;
-    font-weight: 500;
-    margin-top: 9px;
-}
-
-.hero-pill {
-    display: inline-block;
-    margin-top: 14px;
-    padding: 7px 13px;
-    border-radius: 999px;
-    background: #E6F4FF;
-    color: #16834D !important;
-    border: 1px solid #C7E4F8;
-    font-size: 13px;
-    font-weight: 700;
-}
-
-/* SEARCH */
-
-.search-box {
-    background: #FFFFFF !important;
-    border: 1px solid #CFE4F5;
-    border-radius: 18px;
-    padding: 13px;
-    box-shadow: 0 8px 25px rgba(35, 105, 158, .08);
-    margin-bottom: 18px;
-}
-
-/* CARD */
-
-.card {
-    background: #FFFFFF !important;
-    border: 1px solid #D5E8F6;
-    border-radius: 20px;
-    padding: 20px;
-    box-shadow: 0 8px 23px rgba(31, 91, 145, .07);
-    margin-bottom: 12px;
-    color: #14532D !important;
-}
-
-.card * {
-    color: #14532D !important;
-}
-
-.card-title {
-    color: #166534 !important;
-    font-size: 18px;
-    font-weight: 800;
-    margin-bottom: 12px;
-}
-
-.muted {
-    color: #6B7F73 !important;
-}
-
-.small {
-    font-size: 13px;
-}
-
-/* WEATHER HERO */
-
-.weather-hero {
-    min-height: 280px;
-    padding: 25px;
-    border-radius: 22px;
-    color: #FFFFFF !important;
-    background:
-        radial-gradient(circle at 85% 22%, rgba(255,255,255,.30), transparent 23%),
-        linear-gradient(135deg, #1478BD 0%, #218BE6 52%, #1769B9 100%);
-    border: 1px solid rgba(255,255,255,.30);
-    box-shadow: 0 14px 34px rgba(23, 105, 185, .20);
-    position: relative;
-    overflow: hidden;
-}
-
-.weather-hero * {
-    color: #FFFFFF !important;
-}
-
-.weather-hero:after {
-    content: "☁️";
-    position: absolute;
-    right: 16px;
-    bottom: -32px;
-    font-size: 145px;
-    opacity: .12;
-}
-
-.location-line {
-    font-size: 15px;
-    font-weight: 700;
-}
-
-.weather-condition {
-    font-size: 17px;
-    font-weight: 600;
-    margin-top: 7px;
-}
-
-.temperature {
-    font-size: clamp(58px, 7vw, 88px);
-    line-height: .95;
-    font-weight: 800;
-    letter-spacing: -4px;
-    margin-top: 18px;
-}
-
-.feels {
-    font-size: 17px;
-    opacity: .92;
-    margin-top: 8px;
-}
-
-.weather-stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-top: 28px;
-}
-
-.weather-stat {
-    border-top: 1px solid rgba(255,255,255,.25);
-    padding-top: 11px;
-}
-
-.weather-stat-label {
-    font-size: 11px;
-    opacity: .78;
-}
-
-.weather-stat-value {
-    font-size: 14px;
-    font-weight: 700;
-    margin-top: 3px;
-}
-
-/* STATUS */
-
-.status {
-    border-radius: 17px;
-    padding: 15px 17px;
-    margin-bottom: 11px;
-    border: 1px solid;
-}
-
-.status * {
-    font-family: 'Inter', sans-serif !important;
-}
-
-.status-good {
-    background: linear-gradient(135deg, #F0FFF7, #E5F9EF) !important;
-    border-color: #B9E8D0 !important;
-}
-
-.status-good * {
-    color: #176B45 !important;
-}
-
-.status-warning {
-    background: linear-gradient(135deg, #FFFBEF, #FFF3D4) !important;
-    border-color: #F1D48B !important;
-}
-
-.status-warning * {
-    color: #805B00 !important;
-}
-
-.status-danger {
-    background: linear-gradient(135deg, #FFF2F3, #FFE7E9) !important;
-    border-color: #F0BBC0 !important;
-}
-
-.status-danger * {
-    color: #A32934 !important;
-}
-
-.status-kicker {
-    font-size: 12px;
-    font-weight: 700;
-    opacity: .82;
-}
-
-.status-main {
-    font-size: 17px;
-    font-weight: 800;
-    margin-top: 3px;
-}
-
-.status-detail {
-    font-size: 12px;
-    margin-top: 4px;
-    opacity: .82;
-}
-
-/* METRICS */
-
-.metric-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-}
-
-.metric-box {
-    padding: 15px;
-    border-radius: 16px;
-    background: #F7FBFF !important;
-    border: 1px solid #E0EEF8;
-}
-
-.metric-box * {
-    color: #14532D !important;
-}
-
-.metric-icon {
-    font-size: 20px;
-}
-
-.metric-label {
-    font-size: 11px;
-    color: #71847A !important;
-    margin-top: 6px;
-}
-
-.metric-value {
-    color: #166534 !important;
-    font-size: 19px;
-    font-weight: 800;
-    margin-top: 2px;
-}
-
-/* AI */
-
-.ai-card {
-    background: linear-gradient(135deg, #EFF8FF, #E8F3FF) !important;
-    border: 1px solid #BFDFF6;
-    border-radius: 20px;
-    padding: 20px;
-    box-shadow: 0 9px 24px rgba(33, 139, 230, .08);
-    color: #2F6B46 !important;
-}
-
-.ai-card * {
-    color: #2F6B46 !important;
-}
-
-.ai-title {
-    color: #205B3A !important;
-    font-weight: 800;
-    font-size: 18px;
-}
-
-.ai-text {
-    color: #2F6B46 !important;
-    font-size: 14px;
-    line-height: 1.7;
-    margin-top: 12px;
-}
-
-/* CHECKLIST */
-
-.check-item {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 11px 4px;
-    border-bottom: 1px solid #E8F0F6;
-    color: #245C3A !important;
-    font-size: 13px;
-}
-
-.check-item * {
-    color: #245C3A !important;
-}
-
-.check-item:last-child {
-    border-bottom: 0;
-}
-
-.check-icon {
-    width: 27px;
-    height: 27px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #E9F6FF;
-    color: #21834A !important;
-}
-
-/* PLAN */
-
-.plan-item {
-    display: flex;
-    gap: 11px;
-    padding: 11px 0;
-    border-bottom: 1px solid #E7EFF6;
-}
-
-.plan-item:last-child {
-    border-bottom: 0;
-}
-
-.plan-time {
-    color: #16834D !important;
-    font-size: 12px;
-    font-weight: 800;
-}
-
-.plan-text {
-    color: #496B59 !important;
-    font-size: 12px;
-    margin-top: 2px;
-}
-
-/* SECTION */
-
-.section-title {
-    color: #166534 !important;
-    font-size: 22px;
-    font-weight: 800;
-    margin: 15px 0 10px;
-}
-
-/* FORECAST */
-
-.forecast-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 9px;
-}
-
-.forecast-card {
-    min-height: 145px;
-    text-align: center;
-    padding: 14px 8px;
-    border-radius: 16px;
-    background: #FFFFFF !important;
-    border: 1px solid #DCEBF7;
-    box-shadow: 0 6px 16px rgba(31, 91, 145, .06);
-}
-
-.forecast-card * {
-    color: #14532D !important;
-}
-
-.forecast-card.today {
-    background: linear-gradient(180deg, #EDF8FF, #FFFFFF) !important;
-    border-color: #A9D7F5;
-}
-
-.forecast-day {
-    color: #496B59 !important;
-    font-size: 12px;
-    font-weight: 800;
-}
-
-.forecast-icon {
-    font-size: 27px;
-    margin: 10px 0;
-}
-
-.forecast-temp {
-    color: #166534 !important;
-    font-size: 14px;
-    font-weight: 800;
-}
-
-.forecast-rain {
-    color: #54806A !important;
-    font-size: 11px;
-    margin-top: 7px;
-}
-
-/* INPUTS */
-
-div[data-baseweb="input"] {
-    background: #FFFFFF !important;
-    border: 1px solid #CFE3F3 !important;
-    border-radius: 12px !important;
-}
-
-div[data-baseweb="input"] input {
-    color: #14532D !important;
-    background: #FFFFFF !important;
-    -webkit-text-fill-color: #14532D !important;
-}
-
-div[data-baseweb="input"] input::placeholder {
-    color: #789083 !important;
-    -webkit-text-fill-color: #789083 !important;
-}
-
-div[data-baseweb="select"] {
-    background: #FFFFFF !important;
-    border: 1px solid #CFE3F3 !important;
-    border-radius: 12px !important;
-}
-
-div[data-baseweb="select"] * {
-    color: #14532D !important;
-}
-
-div[role="listbox"],
-div[role="option"] {
-    background: #FFFFFF !important;
-    color: #14532D !important;
-}
-
-div[role="option"]:hover {
-    background: #EAF5FF !important;
-}
-
-/* BUTTONS */
-
-.stButton button {
-    min-height: 43px;
-    border-radius: 12px !important;
-    font-weight: 750 !important;
-    border: 1px solid #2185DE !important;
-    background: linear-gradient(135deg, #2196F3, #1769D0) !important;
-    color: #FFFFFF !important;
-    box-shadow: 0 6px 16px rgba(33, 150, 243, .18);
-}
-
-.stButton button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 9px 20px rgba(33, 150, 243, .25);
-}
-
-.stButton button p,
-.stButton button span,
-.stButton button div {
-    color: #FFFFFF !important;
-}
-
-/* ALERTS */
-
-[data-testid="stAlert"] {
-    border-radius: 12px !important;
-}
-
-[data-testid="stAlert"] p,
-[data-testid="stCaptionContainer"] p {
-    color: #2F6B46 !important;
-}
-
-hr {
-    border-color: #D8EAF8 !important;
-}
-
-/* MAP */
-
-.map-wrap {
-    border: 1px solid #D7E9F7;
-    border-radius: 20px;
-    overflow: hidden;
-    box-shadow: 0 9px 25px rgba(31, 91, 145, .08);
-}
-
-/* FOOTER */
-
-.footer {
-    text-align: center;
-    color: #789083 !important;
-    font-size: 12px;
-    padding: 18px 0 5px;
-}
-
-/* LOCATION SOURCE */
-
-.location-source {
-    display: inline-block;
-    margin-top: 7px;
-    padding: 5px 10px;
-    border-radius: 999px;
-    background: #EAF6FF;
-    border: 1px solid #C8E4F7;
-    color: #1769A8 !important;
-    font-size: 11px;
-    font-weight: 700;
-}
-
-/* RESPONSIVE */
-
-@media (max-width: 900px) {
-    .block-container {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+st.markdown(
+    """
+    <style>
+
+    .stApp {
+        background: #ffffff;
     }
 
-    .weather-stats {
-        grid-template-columns: repeat(2, 1fr);
+    .main {
+        padding-top: 1rem;
     }
 
-    .metric-grid {
-        grid-template-columns: repeat(2, 1fr);
+    h1, h2, h3 {
+        color: #183b56;
     }
 
-    .forecast-grid {
-        grid-template-columns: repeat(4, 1fr);
+    p, label, span, div {
+        color: #24506b;
     }
-}
 
-@media (max-width: 600px) {
-    .hero {
+    .top-title {
+        text-align: center;
+        font-size: 18px;
+        margin-bottom: 25px;
+        color: #557083;
+    }
+
+    .section-title {
+        font-size: 30px;
+        font-weight: 700;
+        color: #183b56;
+        margin-top: 25px;
+        margin-bottom: 15px;
+    }
+
+    .weather-card {
+        padding: 25px;
+        border-radius: 20px;
+        background: linear-gradient(
+            135deg,
+            #2374ab,
+            #4c9ed0
+        );
+        color: white;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.10);
+    }
+
+    .weather-card h1,
+    .weather-card h2,
+    .weather-card h3,
+    .weather-card p,
+    .weather-card div {
+        color: white !important;
+    }
+
+    .big-temp {
+        font-size: 58px;
+        font-weight: 700;
+    }
+
+    .condition {
+        font-size: 25px;
+        font-weight: 600;
+    }
+
+    .metric-box {
+        padding: 15px;
+        border-radius: 15px;
+        border: 1px solid #dce7ee;
+        background: #f8fbfd;
+        text-align: center;
+        min-height: 105px;
+    }
+
+    .metric-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #183b56;
+    }
+
+    .metric-label {
+        font-size: 14px;
+        color: #66808f;
+    }
+
+    .good-box {
+        padding: 18px;
+        border-radius: 15px;
+        background: #eaf8ef;
+        border-left: 6px solid #28a745;
+        margin: 10px 0;
+    }
+
+    .warning-box {
+        padding: 18px;
+        border-radius: 15px;
+        background: #fff8e6;
+        border-left: 6px solid #f0ad00;
+        margin: 10px 0;
+    }
+
+    .danger-box {
+        padding: 18px;
+        border-radius: 15px;
+        background: #fff0f0;
+        border-left: 6px solid #dc3545;
+        margin: 10px 0;
+    }
+
+    .route-header {
         padding: 20px;
+        border-radius: 18px;
+        background: linear-gradient(
+            135deg,
+            #173f5f,
+            #287da8
+        );
+        color: white;
+        margin-top: 20px;
+        margin-bottom: 20px;
     }
 
-    .forecast-grid {
-        grid-template-columns: repeat(2, 1fr);
+    .route-header h2,
+    .route-header p,
+    .route-header div {
+        color: white !important;
     }
-}
 
-/* TEXT VISIBILITY */
+    .route-stat {
+        text-align: center;
+        padding: 12px;
+    }
 
-.card,
-.card p,
-.card span,
-.card div,
-.card li,
-.card strong,
-.card b,
-.card em,
-.card small,
-.card-title,
-.section-title,
-.info-card,
-.advice-card,
-.forecast-card,
-.metric-card,
-.weather-detail {
-    color: #14532D !important;
-    -webkit-text-fill-color: #14532D !important;
-}
+    .route-stat-value {
+        font-size: 28px;
+        font-weight: 700;
+    }
 
-.card-title,
-.section-title {
-    color: #166534 !important;
-}
+    .route-stat-label {
+        font-size: 14px;
+    }
 
-.muted,
-.card .muted {
-    color: #557B67 !important;
-    -webkit-text-fill-color: #557B67 !important;
-}
+    .info-box {
+        padding: 18px;
+        border-radius: 15px;
+        background: #f4f9fc;
+        border: 1px solid #dbeaf2;
+        margin: 10px 0;
+    }
 
-.weather-hero,
-.weather-hero p,
-.weather-hero span,
-.weather-hero div,
-.weather-hero strong,
-.weather-hero b,
-.weather-hero h1,
-.weather-hero h2,
-.weather-hero h3 {
-    color: #FFFFFF !important;
-    -webkit-text-fill-color: #FFFFFF !important;
-}
+    .search-box {
+        padding: 15px;
+        border-radius: 15px;
+        background: #f7fafc;
+        border: 1px solid #dce6ed;
+        margin-bottom: 20px;
+    }
 
-</style>
-""", unsafe_allow_html=True)
+    .small-text {
+        color: #718692;
+        font-size: 13px;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # ============================================================
@@ -713,69 +220,110 @@ if "location_name" not in st.session_state:
     st.session_state.location_name = DEFAULT_CITY
 
 if "location_source" not in st.session_state:
-    st.session_state.location_source = "Default location"
+    st.session_state.location_source = "default"
 
-if "gps_requested" not in st.session_state:
-    st.session_state.gps_requested = False
+if "route_data" not in st.session_state:
+    st.session_state.route_data = None
 
-if "gps_error" not in st.session_state:
-    st.session_state.gps_error = None
+if "route_weather" not in st.session_state:
+    st.session_state.route_weather = None
+
+if "destination_name" not in st.session_state:
+    st.session_state.destination_name = ""
+
+if "destination_lat" not in st.session_state:
+    st.session_state.destination_lat = None
+
+if "destination_lon" not in st.session_state:
+    st.session_state.destination_lon = None
 
 
 # ============================================================
-# HELPERS
+# WEATHER DESCRIPTIONS
 # ============================================================
 
 def weather_description(code):
-    codes = {
-        0: "☀️ Clear sky",
-        1: "🌤️ Mainly clear",
-        2: "⛅ Partly cloudy",
-        3: "☁️ Overcast",
-        45: "🌫️ Fog",
-        48: "🌫️ Rime fog",
-        51: "🌦️ Light drizzle",
-        53: "🌦️ Moderate drizzle",
-        55: "🌧️ Heavy drizzle",
-        56: "🌧️ Freezing drizzle",
-        57: "🌧️ Heavy freezing drizzle",
-        61: "🌦️ Light rain",
-        63: "🌧️ Moderate rain",
-        65: "🌧️ Heavy rain",
-        66: "🌧️ Freezing rain",
-        67: "🌧️ Heavy freezing rain",
-        71: "❄️ Light snow",
-        73: "❄️ Moderate snow",
-        75: "❄️ Heavy snow",
-        77: "❄️ Snow grains",
-        80: "🌦️ Light rain showers",
-        81: "🌧️ Moderate rain showers",
-        82: "⛈️ Heavy rain showers",
-        85: "🌨️ Snow showers",
-        86: "❄️ Heavy snow showers",
-        95: "⛈️ Thunderstorm",
-        96: "⛈️ Thunderstorm with hail",
-        99: "⛈️ Severe thunderstorm",
+
+    descriptions = {
+        0: "Clear sky",
+        1: "Mainly clear",
+        2: "Partly cloudy",
+        3: "Overcast",
+        45: "Fog",
+        48: "Depositing rime fog",
+        51: "Light drizzle",
+        53: "Moderate drizzle",
+        55: "Dense drizzle",
+        56: "Light freezing drizzle",
+        57: "Dense freezing drizzle",
+        61: "Slight rain",
+        63: "Moderate rain",
+        65: "Heavy rain",
+        66: "Light freezing rain",
+        67: "Heavy freezing rain",
+        71: "Slight snow",
+        73: "Moderate snow",
+        75: "Heavy snow",
+        77: "Snow grains",
+        80: "Slight rain showers",
+        81: "Moderate rain showers",
+        82: "Violent rain showers",
+        85: "Slight snow showers",
+        86: "Heavy snow showers",
+        95: "Thunderstorm",
+        96: "Thunderstorm with slight hail",
+        99: "Thunderstorm with heavy hail",
     }
 
-    return codes.get(code, "🌤️ Unknown weather")
+    return descriptions.get(code, "Unknown weather")
 
 
 def weather_icon(code):
-    return weather_description(code).split(" ")[0]
+
+    if code == 0:
+        return "☀️"
+
+    if code in [1, 2]:
+        return "🌤️"
+
+    if code == 3:
+        return "☁️"
+
+    if code in [45, 48]:
+        return "🌫️"
+
+    if code in [51, 53, 55, 56, 57]:
+        return "🌦️"
+
+    if code in [61, 63, 65, 80, 81, 82]:
+        return "🌧️"
+
+    if code in [66, 67]:
+        return "🌧️"
+
+    if code in [71, 73, 75, 77, 85, 86]:
+        return "❄️"
+
+    if code in [95, 96, 99]:
+        return "⛈️"
+
+    return "🌦️"
 
 
 def format_time(value):
+
     try:
-        return datetime.fromisoformat(value).strftime("%I:%M %p")
+        dt = datetime.fromisoformat(value)
+        return dt.strftime("%I:%M %p")
     except Exception:
-        return str(value)
+        return value
 
 
 # ============================================================
-# WEATHER API
+# OPEN-METEO WEATHER
 # ============================================================
 
+@st.cache_data(ttl=300)
 def get_weather(latitude, longitude):
 
     url = "https://api.open-meteo.com/v1/forecast"
@@ -783,7 +331,6 @@ def get_weather(latitude, longitude):
     params = {
         "latitude": latitude,
         "longitude": longitude,
-
         "current": ",".join([
             "temperature_2m",
             "relative_humidity_2m",
@@ -795,7 +342,6 @@ def get_weather(latitude, longitude):
             "wind_gusts_10m",
             "uv_index",
         ]),
-
         "hourly": ",".join([
             "temperature_2m",
             "apparent_temperature",
@@ -804,9 +350,10 @@ def get_weather(latitude, longitude):
             "rain",
             "weather_code",
             "wind_speed_10m",
+            "wind_gusts_10m",
+            "relative_humidity_2m",
             "uv_index",
         ]),
-
         "daily": ",".join([
             "weather_code",
             "temperature_2m_max",
@@ -819,12 +366,12 @@ def get_weather(latitude, longitude):
             "sunrise",
             "sunset",
         ]),
-
         "timezone": "auto",
         "forecast_days": 7,
     }
 
     try:
+
         response = requests.get(
             url,
             params=params,
@@ -835,24 +382,132 @@ def get_weather(latitude, longitude):
 
         return response.json()
 
-    except Exception as error:
-        st.error(f"Weather API error: {error}")
+    except Exception:
         return None
 
 
 # ============================================================
-# WORLDWIDE LOCATION SEARCH
+# WORLDWIDE SEARCH
 # ============================================================
 
+@st.cache_data(ttl=3600)
 def search_location(city):
+
+    city = city.strip()
+
+    if not city:
+        return None
 
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
+    queries = [
+        city,
+        city.title(),
+        city.replace(",", " ").strip()
+    ]
+
+    for query in queries:
+
+        params = {
+            "name": query,
+            "count": 10,
+            "language": "en",
+            "format": "json",
+        }
+
+        try:
+
+            response = requests.get(
+                url,
+                params=params,
+                timeout=15
+            )
+
+            response.raise_for_status()
+
+            data = response.json()
+
+            results = data.get("results", [])
+
+            if not results:
+                continue
+
+            query_lower = city.lower()
+
+            # Exact match
+            for result in results:
+
+                result_name = str(
+                    result.get("name", "")
+                ).lower()
+
+                if result_name == query_lower:
+
+                    return (
+                        result.get("latitude"),
+                        result.get("longitude"),
+                        result.get("name", city),
+                        result.get("country", ""),
+                    )
+
+            # Partial match
+            for result in results:
+
+                result_name = str(
+                    result.get("name", "")
+                ).lower()
+
+                if (
+                    query_lower in result_name
+                    or result_name in query_lower
+                ):
+
+                    return (
+                        result.get("latitude"),
+                        result.get("longitude"),
+                        result.get("name", city),
+                        result.get("country", ""),
+                    )
+
+            # First valid result
+            for result in results:
+
+                if (
+                    result.get("latitude") is not None
+                    and result.get("longitude") is not None
+                ):
+
+                    return (
+                        result.get("latitude"),
+                        result.get("longitude"),
+                        result.get("name", city),
+                        result.get("country", ""),
+                    )
+
+        except Exception:
+            continue
+
+    return None
+
+
+# ============================================================
+# OSRM ROUTING
+# ============================================================
+
+@st.cache_data(ttl=600)
+def get_route(start_lat, start_lon, end_lat, end_lon):
+
+    url = (
+        "https://router.project-osrm.org/"
+        f"route/v1/driving/"
+        f"{start_lon},{start_lat};"
+        f"{end_lon},{end_lat}"
+    )
+
     params = {
-        "name": city.strip(),
-        "count": 10,
-        "language": "en",
-        "format": "json",
+        "overview": "full",
+        "geometries": "geojson",
+        "steps": "true",
     }
 
     try:
@@ -860,42 +515,31 @@ def search_location(city):
         response = requests.get(
             url,
             params=params,
-            timeout=15
+            timeout=30
         )
 
         response.raise_for_status()
 
         data = response.json()
 
-        results = data.get("results", [])
-
-        if not results:
+        if data.get("code") != "Ok":
             return None
 
-        # ----------------------------------------------------
-        # Try to select the most useful result.
-        # ----------------------------------------------------
+        routes = data.get("routes", [])
 
-        query_lower = city.strip().lower()
+        if not routes:
+            return None
 
-        exact_matches = [
-            r for r in results
-            if r.get("name", "").lower() == query_lower
-        ]
-
-        if exact_matches:
-            result = exact_matches[0]
-        else:
-            result = results[0]
+        route = routes[0]
 
         return {
-            "latitude": float(result["latitude"]),
-            "longitude": float(result["longitude"]),
-            "name": result.get("name", city),
-            "country": result.get("country", ""),
-            "admin1": result.get("admin1", ""),
-            "timezone": result.get("timezone", ""),
-            "country_code": result.get("country_code", ""),
+            "distance_m": route.get("distance", 0),
+            "duration_s": route.get("duration", 0),
+            "geometry": route.get(
+                "geometry",
+                {}
+            ),
+            "legs": route.get("legs", []),
         }
 
     except Exception:
@@ -903,20 +547,716 @@ def search_location(city):
 
 
 # ============================================================
-# CURRENT LOCATION / GPS
+# DISTANCE CALCULATION
 # ============================================================
 
-def get_browser_location():
+def haversine_distance(lat1, lon1, lat2, lon2):
 
-    return streamlit_js_eval(
+    R = 6371.0
 
+    p1 = math.radians(lat1)
+    p2 = math.radians(lat2)
+
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+
+    a = (
+        math.sin(dp / 2) ** 2
+        +
+        math.cos(p1)
+        * math.cos(p2)
+        * math.sin(dl / 2) ** 2
+    )
+
+    c = 2 * math.atan2(
+        math.sqrt(a),
+        math.sqrt(1 - a)
+    )
+
+    return R * c
+
+
+# ============================================================
+# SAMPLE ROUTE POINTS
+# ============================================================
+
+def sample_route_points(
+    coordinates,
+    number_of_points=8
+):
+
+    if not coordinates:
+        return []
+
+    # OSRM GeoJSON is:
+    # [longitude, latitude]
+
+    points = []
+
+    if len(coordinates) <= number_of_points:
+
+        for index, coordinate in enumerate(coordinates):
+
+            points.append({
+                "index": index,
+                "latitude": coordinate[1],
+                "longitude": coordinate[0],
+            })
+
+        return points
+
+    step = (len(coordinates) - 1) / (
+        number_of_points - 1
+    )
+
+    for i in range(number_of_points):
+
+        position = round(i * step)
+
+        coordinate = coordinates[position]
+
+        points.append({
+            "index": i,
+            "latitude": coordinate[1],
+            "longitude": coordinate[0],
+        })
+
+    return points
+
+
+# ============================================================
+# REVERSE GEOCODING
+# ============================================================
+
+@st.cache_data(ttl=86400)
+def reverse_geocode_route(
+    latitude,
+    longitude
+):
+
+    url = "https://nominatim.openstreetmap.org/reverse"
+
+    params = {
+        "lat": latitude,
+        "lon": longitude,
+        "format": "json",
+        "zoom": 10,
+        "addressdetails": 1,
+    }
+
+    headers = {
+        "User-Agent":
+        "AI-Personal-Weather-Advisor/1.0"
+    }
+
+    try:
+
+        response = requests.get(
+            url,
+            params=params,
+            headers=headers,
+            timeout=15
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        address = data.get(
+            "address",
+            {}
+        )
+
+        place = (
+            address.get("village")
+            or address.get("town")
+            or address.get("city")
+            or address.get("municipality")
+            or address.get("suburb")
+            or address.get("hamlet")
+            or address.get("county")
+        )
+
+        if place:
+            return place
+
+        display_name = data.get(
+            "display_name",
+            ""
+        )
+
+        if display_name:
+
+            return display_name.split(",")[0]
+
+    except Exception:
+        pass
+
+    return "Route Point"
+
+
+# ============================================================
+# BUILD ROUTE LOCATIONS
+# ============================================================
+
+def build_route_locations(
+    route,
+    start_lat,
+    start_lon,
+    end_lat,
+    end_lon
+):
+
+    geometry = route.get(
+        "geometry",
+        {}
+    )
+
+    coordinates = geometry.get(
+        "coordinates",
+        []
+    )
+
+    if not coordinates:
+        return []
+
+    sample_points = sample_route_points(
+        coordinates,
+        number_of_points=8
+    )
+
+    route_locations = []
+
+    total_distance = route["distance_m"] / 1000
+
+    for i, point in enumerate(sample_points):
+
+        lat = point["latitude"]
+        lon = point["longitude"]
+
+        if i == 0:
+
+            place_name = "Starting Location"
+            distance_km = 0
+
+        elif i == len(sample_points) - 1:
+
+            place_name = "Destination"
+            distance_km = total_distance
+
+        else:
+
+            place_name = reverse_geocode_route(
+                lat,
+                lon
+            )
+
+            distance_km = haversine_distance(
+                start_lat,
+                start_lon,
+                lat,
+                lon
+            )
+
+        route_locations.append({
+            "place": place_name,
+            "latitude": lat,
+            "longitude": lon,
+            "distance_km": distance_km,
+        })
+
+        # Small delay for public reverse-geocoding service
+        if 0 < i < len(sample_points) - 1:
+            time.sleep(0.8)
+
+    # Remove consecutive duplicate names
+
+    cleaned = []
+
+    for item in route_locations:
+
+        if (
+            cleaned
+            and
+            cleaned[-1]["place"].lower()
+            == item["place"].lower()
+        ):
+
+            continue
+
+        cleaned.append(item)
+
+    return cleaned
+
+
+# ============================================================
+# ROUTE WEATHER
+# ============================================================
+
+def find_nearest_hour(
+    hourly_times,
+    target_datetime
+):
+
+    if not hourly_times:
+        return 0
+
+    best_index = 0
+    best_difference = None
+
+    for i, value in enumerate(hourly_times):
+
+        try:
+
+            current_time = datetime.fromisoformat(
+                value
+            )
+
+            difference = abs(
+                (
+                    current_time
+                    - target_datetime
+                ).total_seconds()
+            )
+
+            if (
+                best_difference is None
+                or
+                difference < best_difference
+            ):
+
+                best_difference = difference
+                best_index = i
+
+        except Exception:
+            continue
+
+    return best_index
+
+
+def get_route_weather(
+    route_locations,
+    route_duration_seconds
+):
+
+    if not route_locations:
+        return []
+
+    start_time = datetime.now()
+
+    total_distance = route_locations[-1][
+        "distance_km"
+    ]
+
+    results = []
+
+    for location in route_locations:
+
+        if total_distance > 0:
+
+            progress = (
+                location["distance_km"]
+                / total_distance
+            )
+
+        else:
+
+            progress = 0
+
+        estimated_seconds = (
+            route_duration_seconds
+            * progress
+        )
+
+        estimated_time = (
+            start_time
+            + timedelta(
+                seconds=estimated_seconds
+            )
+        )
+
+        weather = get_weather(
+            location["latitude"],
+            location["longitude"]
+        )
+
+        if weather is None:
+            continue
+
+        hourly = weather.get(
+            "hourly",
+            {}
+        )
+
+        current = weather.get(
+            "current",
+            {}
+        )
+
+        hourly_times = hourly.get(
+            "time",
+            []
+        )
+
+        hour_index = find_nearest_hour(
+            hourly_times,
+            estimated_time
+        )
+
+        def get_hourly(
+            key,
+            default=0
+        ):
+
+            values = hourly.get(
+                key,
+                []
+            )
+
+            if (
+                values
+                and
+                hour_index < len(values)
+            ):
+                return values[hour_index]
+
+            return default
+
+        temperature = get_hourly(
+            "temperature_2m",
+            current.get(
+                "temperature_2m",
+                0
+            )
+        )
+
+        feels_like = get_hourly(
+            "apparent_temperature",
+            current.get(
+                "apparent_temperature",
+                0
+            )
+        )
+
+        rain_probability = get_hourly(
+            "precipitation_probability",
+            0
+        )
+
+        precipitation = get_hourly(
+            "precipitation",
+            0
+        )
+
+        rain = get_hourly(
+            "rain",
+            0
+        )
+
+        wind = get_hourly(
+            "wind_speed_10m",
+            current.get(
+                "wind_speed_10m",
+                0
+            )
+        )
+
+        humidity = get_hourly(
+            "relative_humidity_2m",
+            current.get(
+                "relative_humidity_2m",
+                0
+            )
+        )
+
+        uv = get_hourly(
+            "uv_index",
+            current.get(
+                "uv_index",
+                0
+            )
+        )
+
+        code = get_hourly(
+            "weather_code",
+            current.get(
+                "weather_code",
+                0
+            )
+        )
+
+        # Risk
+
+        risk = "🟢 Good"
+
+        if (
+            code in [95, 96, 99]
+            or rain_probability >= 85
+            or wind >= 50
+            or temperature >= 40
+            or feels_like >= 42
+        ):
+
+            risk = "🔴 High Risk"
+
+        elif (
+            rain_probability >= 60
+            or wind >= 30
+            or temperature >= 35
+            or feels_like >= 38
+            or uv >= 8
+            or rain > 0
+        ):
+
+            risk = "🟡 Caution"
+
+        results.append({
+            **location,
+            "estimated_time": estimated_time,
+            "temperature": temperature,
+            "feels_like": feels_like,
+            "rain_probability": rain_probability,
+            "precipitation": precipitation,
+            "rain": rain,
+            "wind": wind,
+            "humidity": humidity,
+            "uv": uv,
+            "weather_code": code,
+            "condition": weather_description(code),
+            "icon": weather_icon(code),
+            "risk": risk,
+        })
+
+    return results
+
+
+# ============================================================
+# ROUTE AI ANALYSIS
+# ============================================================
+
+def analyze_route_weather(route_weather):
+
+    if not route_weather:
+
+        return {
+            "risk": "🟢 Unknown",
+            "message":
+                "Route weather data is unavailable.",
+            "advice": [
+                "Check your route again.",
+            ],
+        }
+
+    high_risk = []
+    caution = []
+
+    for point in route_weather:
+
+        if "🔴" in point["risk"]:
+            high_risk.append(point)
+
+        elif "🟡" in point["risk"]:
+            caution.append(point)
+
+    if high_risk:
+
+        worst = high_risk[0]
+
+        return {
+            "risk": "🔴 High Risk",
+            "message": (
+                "Weather conditions may become "
+                "unsafe during part of your journey."
+            ),
+            "advice": [
+                (
+                    f"Be careful around "
+                    f"{worst['place']}."
+                ),
+                (
+                    "Check rain and wind conditions "
+                    "before starting."
+                ),
+                (
+                    "Consider delaying the journey "
+                    "if severe weather is expected."
+                ),
+            ],
+        }
+
+    if caution:
+
+        first = caution[0]
+
+        return {
+            "risk": "🟡 Moderate Risk",
+            "message": (
+                "Most of the route looks manageable, "
+                "but some sections need caution."
+            ),
+            "advice": [
+                (
+                    f"Take extra care around "
+                    f"{first['place']}."
+                ),
+                "Carry water.",
+                "Keep an umbrella or rain protection.",
+                "Allow some extra travel time.",
+            ],
+        }
+
+    return {
+        "risk": "🟢 Good",
+        "message": (
+            "Weather conditions look generally "
+            "favorable across the route."
+        ),
+        "advice": [
+            "Carry drinking water.",
+            "Use sunscreen during daytime.",
+            "Wear comfortable/light clothing.",
+            "Check the weather again before departure.",
+        ],
+    }
+
+
+# ============================================================
+# LOCATION SECTION
+# ============================================================
+
+st.markdown(
+    '<div class="top-title">'
+    'Weather intelligence + personal outdoor advice'
+    '</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="section-title">📍 Location</div>',
+    unsafe_allow_html=True
+)
+
+
+st.markdown(
+    '<div class="search-box">',
+    unsafe_allow_html=True
+)
+
+col1, col2, col3 = st.columns(
+    [4.5, 1.4, 1.4]
+)
+
+with col1:
+
+    search_city = st.text_input(
+        "🌎 Search any city in the world",
+        placeholder=(
+            "Example: Vijayawada, Hyderabad, "
+            "Tokyo, London, New York"
+        ),
+        label_visibility="collapsed",
+    )
+
+with col2:
+
+    search_clicked = st.button(
+        "🔎 Search Location",
+        use_container_width=True
+    )
+
+with col3:
+
+    current_clicked = st.button(
+        "📍 My Location",
+        use_container_width=True
+    )
+
+st.markdown(
+    "</div>",
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# SEARCH LOCATION
+# ============================================================
+
+if search_clicked:
+
+    search_text = search_city.strip()
+
+    if not search_text:
+
+        st.warning(
+            "⚠️ Please enter a location."
+        )
+
+    else:
+
+        with st.spinner(
+            "🌍 Searching worldwide..."
+        ):
+
+            result = search_location(
+                search_text
+            )
+
+        if result:
+
+            lat, lon, name, country = result
+
+            st.session_state.latitude = float(
+                lat
+            )
+
+            st.session_state.longitude = float(
+                lon
+            )
+
+            if country:
+
+                st.session_state.location_name = (
+                    f"{name}, {country}"
+                )
+
+            else:
+
+                st.session_state.location_name = name
+
+            st.session_state.location_source = (
+                "search"
+            )
+
+            # Reset previous route
+            st.session_state.route_data = None
+            st.session_state.route_weather = None
+
+            st.rerun()
+
+        else:
+
+            st.error(
+                f"❌ Could not find "
+                f"'{search_text}'. "
+                "Try adding the state or country."
+            )
+
+
+# ============================================================
+# CURRENT LOCATION
+# ============================================================
+
+if current_clicked:
+
+    location = streamlit_js_eval(
         js_expressions="""
         new Promise((resolve) => {
 
             if (!navigator.geolocation) {
 
                 resolve({
-                    error: "Geolocation is not supported by this browser."
+                    error:
+                    "Geolocation is not supported."
                 });
 
                 return;
@@ -928,13 +1268,11 @@ def get_browser_location():
 
                     resolve({
 
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude,
+                        latitude:
+                            position.coords.latitude,
 
-                        accuracy: position.coords.accuracy,
-
-                        timestamp: Date.now()
-
+                        longitude:
+                            position.coords.longitude
                     });
 
                 },
@@ -942,10 +1280,7 @@ def get_browser_location():
                 error => {
 
                     resolve({
-
-                        error: error.message,
-                        code: error.code
-
+                        error: error.message
                     });
 
                 },
@@ -953,262 +1288,61 @@ def get_browser_location():
                 {
                     enableHighAccuracy: true,
                     timeout: 15000,
-                    maximumAge: 300000
+                    maximumAge: 0
                 }
-
             );
 
         })
         """,
-
         want_output=True,
-
-        key="browser_location_request",
+        key="current_location"
     )
 
-
-def reverse_geocode(latitude, longitude):
-
-    # Open-Meteo does not provide reverse geocoding.
-    # We therefore keep a safe coordinate-based name.
-
-    return f"Current Location ({latitude:.4f}, {longitude:.4f})"
-
-
-# ============================================================
-# HEADER
-# ============================================================
-
-st.markdown("""
-<div class="hero">
-
-    <div class="hero-title">
-        🌦️ AI Personal Weather Advisor
-    </div>
-
-    <div class="hero-subtitle">
-        Smarter Weather &nbsp;•&nbsp;
-        Safer You &nbsp;•&nbsp;
-        Better Decisions
-    </div>
-
-    <div class="hero-pill">
-        🤖 Personalized outdoor weather intelligence
-    </div>
-
-</div>
-""", unsafe_allow_html=True)
-
-
-# ============================================================
-# LOCATION SEARCH
-# ============================================================
-
-st.markdown(
-    '<div class="search-box">',
-    unsafe_allow_html=True
-)
-
-c1, c2, c3 = st.columns(
-    [4.5, 1.35, 1.35]
-)
-
-with c1:
-
-    search_city = st.text_input(
-
-        "🌎 Search any city",
-
-        placeholder=(
-            "Example: Vijayawada, Hyderabad, "
-            "Tokyo, London, New York"
-        ),
-
-        label_visibility="collapsed",
-
-    )
-
-
-with c2:
-
-    search_clicked = st.button(
-        "🔎 Get Weather",
-        use_container_width=True
-    )
-
-
-with c3:
-
-    current_clicked = st.button(
-        "📍 My Location",
-        use_container_width=True
-    )
-
-
-st.markdown(
-    "</div>",
-    unsafe_allow_html=True
-)
-
-
-# ============================================================
-# WORLDWIDE SEARCH PROCESSING
-# ============================================================
-
-if search_clicked:
-
-    if not search_city.strip():
-
-        st.warning(
-            "Please enter a city, town or place."
-        )
-
-    else:
-
-        result = search_location(
-            search_city.strip()
-        )
-
-        if result:
-
-            lat = result["latitude"]
-            lon = result["longitude"]
-
-            name = result["name"]
-            country = result["country"]
-            admin1 = result["admin1"]
-
-            # -----------------------------------------------
-            # Build readable location name
-            # -----------------------------------------------
-
-            location_parts = [name]
-
-            if admin1 and admin1.lower() != name.lower():
-                location_parts.append(admin1)
-
-            if country:
-                location_parts.append(country)
-
-            location_display = ", ".join(
-                location_parts
-            )
-
-            # -----------------------------------------------
-            # Update selected location
-            # -----------------------------------------------
-
-            st.session_state.latitude = lat
-            st.session_state.longitude = lon
-
-            st.session_state.location_name = (
-                location_display
-            )
-
-            st.session_state.location_source = (
-                "🌎 Worldwide location search"
-            )
-
-            st.session_state.gps_error = None
-
-            st.rerun()
-
-        else:
-
-            st.error(
-                "❌ Location not found. "
-                "Try another city, town or place."
-            )
-
-
-# ============================================================
-# MY LOCATION PROCESSING
-# ============================================================
-
-if current_clicked:
-
-    st.session_state.gps_requested = True
-
-    st.session_state.gps_error = None
-
-    st.info(
-        "📍 Requesting your browser location. "
-        "Please allow location permission if your browser asks."
-    )
-
-
-# ============================================================
-# RUN GPS REQUEST
-# ============================================================
-
-if st.session_state.gps_requested:
-
-    location = get_browser_location()
-
-    if location and isinstance(location, dict):
-
-        # -----------------------------------------------
-        # Successful GPS
-        # -----------------------------------------------
+    if (
+        location
+        and isinstance(location, dict)
+    ):
 
         if (
             "latitude" in location
-            and "longitude" in location
+            and
+            "longitude" in location
         ):
 
-            gps_lat = float(
+            st.session_state.latitude = float(
                 location["latitude"]
             )
 
-            gps_lon = float(
+            st.session_state.longitude = float(
                 location["longitude"]
             )
 
-            st.session_state.latitude = gps_lat
-
-            st.session_state.longitude = gps_lon
-
             st.session_state.location_name = (
-                reverse_geocode(
-                    gps_lat,
-                    gps_lon
-                )
+                "Current Location"
             )
 
             st.session_state.location_source = (
-                "📍 Live browser GPS location"
+                "gps"
             )
 
-            st.session_state.gps_requested = False
-
-            st.session_state.gps_error = None
+            st.session_state.route_data = None
+            st.session_state.route_weather = None
 
             st.rerun()
 
-        # -----------------------------------------------
-        # GPS ERROR
-        # -----------------------------------------------
-
         elif "error" in location:
 
-            st.session_state.gps_error = (
-                location["error"]
-            )
-
-            st.session_state.gps_requested = False
-
             st.warning(
-                "📍 Could not get your live location: "
+                "📍 Location permission: "
                 + str(location["error"])
             )
 
 
 # ============================================================
-# WEATHER DATA
+# CURRENT WEATHER
 # ============================================================
 
 latitude = st.session_state.latitude
-
 longitude = st.session_state.longitude
 
 weather = get_weather(
@@ -1217,60 +1351,69 @@ weather = get_weather(
 )
 
 if weather is None:
+
+    st.error(
+        "Unable to load weather data."
+    )
+
     st.stop()
 
-
 current = weather["current"]
-
 hourly = weather["hourly"]
-
 daily = weather["daily"]
 
+temperature = current.get(
+    "temperature_2m",
+    0
+)
 
-# ============================================================
-# CURRENT WEATHER VARIABLES
-# ============================================================
+humidity = current.get(
+    "relative_humidity_2m",
+    0
+)
 
-temperature = current["temperature_2m"]
+feels_like = current.get(
+    "apparent_temperature",
+    0
+)
 
-humidity = current[
-    "relative_humidity_2m"
-]
+precipitation = current.get(
+    "precipitation",
+    0
+)
 
-feels_like = current[
-    "apparent_temperature"
-]
+rain = current.get(
+    "rain",
+    0
+)
 
-precipitation = current[
-    "precipitation"
-]
+wind = current.get(
+    "wind_speed_10m",
+    0
+)
 
-rain = current["rain"]
+wind_gust = current.get(
+    "wind_gusts_10m",
+    0
+)
 
-wind = current[
-    "wind_speed_10m"
-]
+uv_index = current.get(
+    "uv_index",
+    0
+)
 
-wind_gust = current[
-    "wind_gusts_10m"
-]
-
-uv_index = current[
-    "uv_index"
-]
-
-weather_code = current[
-    "weather_code"
-]
+weather_code = current.get(
+    "weather_code",
+    0
+)
 
 condition = weather_description(
     weather_code
 )
 
-
-# ============================================================
-# RAIN PROBABILITY
-# ============================================================
+icon = weather_icon(
+    weather_code
+)
 
 rain_probabilities = hourly.get(
     "precipitation_probability",
@@ -1287,1400 +1430,1297 @@ max_rain_probability = (
 
 
 # ============================================================
-# LOCATION LABEL
+# LOCATION DISPLAY
 # ============================================================
 
 st.markdown(
     f"""
+    <h2>📍 {st.session_state.location_name}</h2>
+    <p class="small-text">
+    Coordinates:
+    {latitude:.4f}, {longitude:.4f}
+    </p>
+    """,
+    unsafe_allow_html=True
+)
 
-    <div style="margin:5px 2px 14px;">
 
-        <div style="
-            color:#123B6D !important;
-            font-size:14px;
-            font-weight:800;
-        ">
+# ============================================================
+# WEATHER HERO
+# ============================================================
 
-            📍 {st.session_state.location_name}
+st.markdown(
+    f"""
+    <div class="weather-card">
 
+        <div style="font-size:45px;">
+            {icon}
         </div>
 
-        <div style="
-            color:#7893AD !important;
-            font-size:11px;
-            margin-top:3px;
-        ">
-
-            Coordinates:
-            {latitude:.4f},
-            {longitude:.4f}
-
+        <div class="big-temp">
+            {temperature:.0f}°C
         </div>
 
-        <div class="location-source">
-
-            {st.session_state.location_source}
-
+        <div class="condition">
+            {condition}
         </div>
+
+        <p>
+            Feels like {feels_like:.0f}°C
+        </p>
 
     </div>
-
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 
 # ============================================================
-# THREE-COLUMN MAIN DASHBOARD
+# RISK
 # ============================================================
 
-left, middle, right = st.columns(
-    [1.25, 1.05, .95],
-    gap="medium"
+if (
+    temperature >= 40
+    or feels_like >= 42
+    or wind >= 50
+    or uv_index >= 9
+):
+
+    risk = "🔴 Dangerous"
+
+elif (
+    temperature >= 35
+    or feels_like >= 38
+    or wind >= 30
+    or uv_index >= 6
+    or max_rain_probability >= 70
+    or rain > 0
+):
+
+    risk = "🟡 Caution"
+
+else:
+
+    risk = "🟢 Good"
+
+
+st.markdown(
+    f"""
+    <div class="info-box">
+        <b>Overall Weather:</b> {risk}
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 
 # ============================================================
-# LEFT
-# ============================================================
-
-with left:
-
-    st.markdown(
-        f"""
-
-        <div class="weather-hero">
-
-            <div class="location-line">
-                📍 {st.session_state.location_name}
-            </div>
-
-            <div class="weather-condition">
-                {condition}
-            </div>
-
-            <div class="temperature">
-                {temperature:.0f}°C
-            </div>
-
-            <div class="feels">
-                Feels like {feels_like:.0f}°C
-            </div>
-
-            <div class="weather-stats">
-
-                <div class="weather-stat">
-
-                    <div class="weather-stat-label">
-                        💧 HUMIDITY
-                    </div>
-
-                    <div class="weather-stat-value">
-                        {humidity}%
-                    </div>
-
-                </div>
-
-
-                <div class="weather-stat">
-
-                    <div class="weather-stat-label">
-                        💨 WIND
-                    </div>
-
-                    <div class="weather-stat-value">
-                        {wind:.0f} km/h
-                    </div>
-
-                </div>
-
-
-                <div class="weather-stat">
-
-                    <div class="weather-stat-label">
-                        ☀️ UV INDEX
-                    </div>
-
-                    <div class="weather-stat-value">
-                        {uv_index:.1f}
-                    </div>
-
-                </div>
-
-
-                <div class="weather-stat">
-
-                    <div class="weather-stat-label">
-                        🌧️ RAIN
-                    </div>
-
-                    <div class="weather-stat-value">
-                        {rain:.1f} mm
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-    # ========================================================
-    # RISK
-    # ========================================================
-
-    risk = "good"
-
-
-    if (
-        temperature >= 40
-        or feels_like >= 42
-        or wind >= 50
-        or uv_index >= 9
-        or weather_code >= 95
-    ):
-
-        risk = "danger"
-
-
-    elif (
-        temperature >= 35
-        or feels_like >= 38
-        or wind >= 30
-        or uv_index >= 6
-        or max_rain_probability >= 70
-        or rain > 0
-    ):
-
-        risk = "warning"
-
-
-    if risk == "good":
-
-        st.markdown(
-            """
-
-            <div class="status status-good">
-
-                <div class="status-kicker">
-                    ✓ WEATHER CONDITION
-                </div>
-
-                <div class="status-main">
-                    Good Conditions
-                </div>
-
-                <div class="status-detail">
-                    You can generally go outside.
-                    Normal precautions are enough.
-                </div>
-
-            </div>
-
-            """,
-            unsafe_allow_html=True,
-        )
-
-
-    elif risk == "warning":
-
-        st.markdown(
-            """
-
-            <div class="status status-warning">
-
-                <div class="status-kicker">
-                    ⚠ WEATHER CONDITION
-                </div>
-
-                <div class="status-main">
-                    Caution Recommended
-                </div>
-
-                <div class="status-detail">
-                    Outdoor activity is possible,
-                    but follow the recommendations below.
-                </div>
-
-            </div>
-
-            """,
-            unsafe_allow_html=True,
-        )
-
-
-    else:
-
-        st.markdown(
-            """
-
-            <div class="status status-danger">
-
-                <div class="status-kicker">
-                    ! WEATHER CONDITION
-                </div>
-
-                <div class="status-main">
-                    Conditions Need Attention
-                </div>
-
-                <div class="status-detail">
-                    Consider delaying unnecessary outdoor
-                    activity and take precautions.
-                </div>
-
-            </div>
-
-            """,
-            unsafe_allow_html=True,
-        )
-
-
-    # ========================================================
-    # ACTIVITY
-    # ========================================================
-
-    st.markdown(
-        '<div class="section-title">'
-        '🏃 Activity Recommendation'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-
-    activity = st.selectbox(
-
-        "Choose an activity",
-
-        [
-            "Just going outside",
-            "🚶 Walking",
-            "🏃 Running",
-            "🏏 Playing sports",
-            "🚗 Travelling",
-            "🏫 Going to college",
-            "💼 Going to work",
-            "🛍️ Shopping",
-            "🌳 Outdoor event",
-        ],
-
-        label_visibility="collapsed",
-
-    )
-
-
-    if activity == "🏃 Running":
-
-        if (
-            temperature >= 35
-            or feels_like >= 38
-        ):
-
-            activity_advice = (
-                "🔴 Running is not recommended right now. "
-                "Try early morning or evening."
-            )
-
-        elif (
-            rain > 0
-            or max_rain_probability >= 70
-        ):
-
-            activity_advice = (
-                "🌧️ Rain is likely. "
-                "Consider postponing your run."
-            )
-
-        elif uv_index >= 8:
-
-            activity_advice = (
-                "☀️ UV is very high. "
-                "Run during a cooler time and use sun protection."
-            )
-
-        else:
-
-            activity_advice = (
-                "🟢 Good conditions for running."
-            )
-
-
-    elif activity == "🚶 Walking":
-
-        if temperature >= 38:
-
-            activity_advice = (
-                "🟡 Walking is possible, but choose "
-                "a cooler time and carry water."
-            )
-
-        else:
-
-            activity_advice = (
-                "🟢 Good conditions for walking."
-            )
-
-
-    elif activity == "🏏 Playing sports":
-
-        if temperature >= 35:
-
-            activity_advice = (
-                "🟡 Heat may make outdoor sports uncomfortable. "
-                "Prefer morning or evening."
-            )
-
-        elif max_rain_probability >= 70:
-
-            activity_advice = (
-                "🌧️ Rain may interrupt outdoor sports. "
-                "Consider postponing."
-            )
-
-        else:
-
-            activity_advice = (
-                "🟢 Conditions are generally suitable "
-                "for outdoor sports."
-            )
-
-
-    elif activity == "🚗 Travelling":
-
-        if (
-            max_rain_probability >= 70
-            or wind >= 50
-        ):
-
-            activity_advice = (
-                "🟡 Travel with extra caution because "
-                "weather may affect the journey."
-            )
-
-        else:
-
-            activity_advice = (
-                "🟢 No major weather-related concern detected."
-            )
-
-
-    elif activity in [
-        "🏫 Going to college",
-        "💼 Going to work",
-        "🛍️ Shopping"
-    ]:
-
-        if max_rain_probability >= 70:
-
-            activity_advice = (
-                "☂️ Carry an umbrella before leaving."
-            )
-
-        elif temperature >= 38:
-
-            activity_advice = (
-                "☀️ It is hot. Use sunscreen, "
-                "carry water and avoid long exposure."
-            )
-
-        else:
-
-            activity_advice = (
-                "🟢 Conditions are generally comfortable."
-            )
-
-
-    elif activity == "🌳 Outdoor event":
-
-        if temperature >= 38:
-
-            activity_advice = (
-                "🟡 Consider moving the event to a cooler time."
-            )
-
-        elif max_rain_probability >= 70:
-
-            activity_advice = (
-                "🌧️ Rain may affect the event. "
-                "Have an indoor backup plan."
-            )
-
-        else:
-
-            activity_advice = (
-                "🟢 Conditions look suitable for an outdoor event."
-            )
-
-
-    else:
-
-        activity_advice = (
-            "🟢 Normal outdoor precautions should be enough."
-        )
-
-
-    st.markdown(
-        f"""
-
-        <div class="ai-card">
-
-            <div class="ai-title">
-                {activity}
-            </div>
-
-            <div class="ai-text">
-                {activity_advice}
-            </div>
-
-        </div>
-
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-# ============================================================
-# MIDDLE
-# ============================================================
-
-with middle:
-
-    st.markdown(
-        '<div class="section-title">'
-        '🌡️ Today\'s Weather Details'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-
-    st.markdown(
-        f"""
-
-        <div class="card">
-
-            <div class="metric-grid">
-
-                <div class="metric-box">
-
-                    <div class="metric-icon">
-                        🌡️
-                    </div>
-
-                    <div class="metric-label">
-                        MAX TEMP
-                    </div>
-
-                    <div class="metric-value">
-                        {daily["temperature_2m_max"][0]:.0f}°C
-                    </div>
-
-                </div>
-
-
-                <div class="metric-box">
-
-                    <div class="metric-icon">
-                        ❄️
-                    </div>
-
-                    <div class="metric-label">
-                        MIN TEMP
-                    </div>
-
-                    <div class="metric-value">
-                        {daily["temperature_2m_min"][0]:.0f}°C
-                    </div>
-
-                </div>
-
-
-                <div class="metric-box">
-
-                    <div class="metric-icon">
-                        🌧️
-                    </div>
-
-                    <div class="metric-label">
-                        RAIN CHANCE
-                    </div>
-
-                    <div class="metric-value">
-                        {daily["precipitation_probability_max"][0]}%
-                    </div>
-
-                </div>
-
-
-                <div class="metric-box">
-
-                    <div class="metric-icon">
-                        ☀️
-                    </div>
-
-                    <div class="metric-label">
-                        UV INDEX
-                    </div>
-
-                    <div class="metric-value">
-                        {uv_index:.1f}
-                    </div>
-
-                </div>
-
-
-                <div class="metric-box">
-
-                    <div class="metric-icon">
-                        💨
-                    </div>
-
-                    <div class="metric-label">
-                        WIND
-                    </div>
-
-                    <div class="metric-value">
-                        {wind:.0f}
-                    </div>
-
-                </div>
-
-
-                <div class="metric-box">
-
-                    <div class="metric-icon">
-                        🌡️
-                    </div>
-
-                    <div class="metric-label">
-                        FEELS LIKE
-                    </div>
-
-                    <div class="metric-value">
-                        {feels_like:.0f}°C
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-    # ========================================================
-    # CHECKLIST
-    # ========================================================
-
-    st.markdown(
-        '<div class="section-title">'
-        '🎒 Personal Checklist'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-
-    checklist = []
-
-
-    if (
-        temperature >= 35
-        or uv_index >= 6
-    ):
-
-        checklist.append(
-            ("🧴", "Carry sunscreen")
-        )
-
-
-    if temperature >= 32:
-
-        checklist.append(
-            ("💧", "Carry a water bottle")
-        )
-
-
-    if (
-        temperature >= 32
-        or uv_index >= 6
-    ):
-
-        checklist.append(
-            ("🧢", "Wear a cap / hat")
-        )
-
-
-    if uv_index >= 6:
-
-        checklist.append(
-            ("🕶️", "Keep sunglasses")
-        )
-
-
-    if (
-        max_rain_probability >= 50
-        or rain > 0
-    ):
-
-        checklist.append(
-            ("☂️", "Carry an umbrella")
-        )
-
-
-    if temperature <= 18:
-
-        checklist.append(
-            ("🧥", "Take a jacket")
-        )
-
-
-    if not checklist:
-
-        checklist.append(
-            ("🎒", "No special weather equipment needed")
-        )
-
-
-    checklist_html = '<div class="card">'
-
-
-    for icon, item in checklist:
-
-        checklist_html += f"""
-
-        <div class="check-item">
-
-            <div class="check-icon">
-                {icon}
-            </div>
-
-            <div>
-                {item}
-            </div>
-
-        </div>
-
-        """
-
-
-    checklist_html += "</div>"
-
-
-    st.markdown(
-        checklist_html,
-        unsafe_allow_html=True
-    )
-
-
-    # ========================================================
-    # BEST TIME
-    # ========================================================
-
-    st.markdown(
-        '<div class="section-title">'
-        '⏰ Best Time to Go Outside'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-
-    hourly_temp = hourly.get(
-        "temperature_2m",
-        []
-    )
-
-    hourly_uv = hourly.get(
-        "uv_index",
-        []
-    )
-
-    hourly_rain = hourly.get(
-        "precipitation_probability",
-        []
-    )
-
-
-    scores = []
-
-
-    for i in range(
-        min(24, len(hourly_temp))
-    ):
-
-        score = 0
-
-        temp = hourly_temp[i]
-
-        uv = (
-            hourly_uv[i]
-            if i < len(hourly_uv)
-            else 0
-        )
-
-        rain_probability = (
-            hourly_rain[i]
-            if i < len(hourly_rain)
-            else 0
-        )
-
-
-        if 20 <= temp <= 32:
-
-            score += 3
-
-        elif 18 <= temp <= 35:
-
-            score += 1
-
-
-        if uv <= 5:
-
-            score += 2
-
-
-        if rain_probability < 30:
-
-            score += 2
-
-        elif rain_probability < 60:
-
-            score += 1
-
-
-        scores.append(score)
-
-
-    if (
-        scores
-        and hourly.get("time")
-    ):
-
-        best_index = scores.index(
-            max(scores)
-        )
-
-        best_time = format_time(
-            hourly["time"][best_index]
-        )
-
-    else:
-
-        best_time = "Not available"
-
-
-    st.markdown(
-        f"""
-
-        <div class="card"
-             style="
-             background:
-             linear-gradient(
-                 135deg,
-                 #FFF9EC,
-                 #FFFFFF
-             ) !important;
-             ">
-
-            <div style="
-                color:#8A6200 !important;
-                font-size:12px;
-                font-weight:700;
-            ">
-
-                RECOMMENDED TIME
-
-            </div>
-
-            <div style="
-                color:#173B68 !important;
-                font-size:22px;
-                font-weight:800;
-                margin-top:4px;
-            ">
-
-                {best_time}
-
-            </div>
-
-            <div class="muted small">
-
-                Based on temperature,
-                UV and rain probability.
-
-            </div>
-
-        </div>
-
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-# ============================================================
-# RIGHT
-# ============================================================
-
-with right:
-
-    advice_parts = []
-
-
-    if (
-        temperature >= 40
-        or feels_like >= 42
-    ):
-
-        advice_parts.append(
-            "Extreme heat is present. "
-            "Avoid unnecessary outdoor activity "
-            "and stay hydrated."
-        )
-
-    elif (
-        temperature >= 35
-        or feels_like >= 38
-    ):
-
-        advice_parts.append(
-            "It is hot outside. "
-            "Limit prolonged exposure and carry water."
-        )
-
-    else:
-
-        advice_parts.append(
-            "The temperature is generally comfortable "
-            "for outdoor activities."
-        )
-
-
-    if uv_index >= 8:
-
-        advice_parts.append(
-            "UV is very high, so use sunscreen, "
-            "sunglasses and shade."
-        )
-
-    elif uv_index >= 6:
-
-        advice_parts.append(
-            "UV is high, so sun protection is recommended."
-        )
-
-
-    if max_rain_probability >= 70:
-
-        advice_parts.append(
-            "Rain is likely in the next few hours, "
-            "so carry an umbrella."
-        )
-
-
-    if wind >= 40:
-
-        advice_parts.append(
-            "Wind is strong, so take extra care outdoors."
-        )
-
-
-    ai_message = " ".join(
-        advice_parts
-    )
-
-
-    st.markdown(
-        f"""
-
-        <div class="ai-card">
-
-            <div class="ai-title">
-                🤖 AI Personal Advice
-            </div>
-
-            <div class="ai-text">
-                “{ai_message}”
-            </div>
-
-            <div style="
-                margin-top:15px;
-                color:#2D78B5 !important;
-                font-size:12px;
-                font-weight:700;
-            ">
-
-                💙 Stay Safe
-                &nbsp;•&nbsp;
-                Stay Healthy
-                &nbsp;•&nbsp;
-                Stay Happy
-
-            </div>
-
-        </div>
-
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-    # ========================================================
-    # DAILY PLAN
-    # ========================================================
-
-    st.markdown(
-        '<div class="section-title">'
-        '📅 Daily Plan'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-
-    daily_plan = [
-
-        (
-            "🌅",
-            "6:00 AM – 9:00 AM",
-            "Best window for walking / exercise"
-        ),
-
-        (
-            "💼",
-            "9:00 AM – 12:00 PM",
-            "Work, college or study"
-        ),
-
-        (
-            "☀️",
-            "12:00 PM – 4:00 PM",
-            "Avoid long exposure if heat/UV is high"
-        ),
-
-        (
-            "🚶",
-            "4:00 PM – 7:00 PM",
-            "Outdoor activities if conditions permit"
-        ),
-
-        (
-            "🌙",
-            "7:00 PM – 10:00 PM",
-            "Relax / family time"
-        ),
-
-    ]
-
-
-    plan_html = '<div class="card">'
-
-
-    for icon, time_text, detail in daily_plan:
-
-        plan_html += f"""
-
-        <div class="plan-item">
-
-            <div style="font-size:20px;">
-                {icon}
-            </div>
-
-            <div>
-
-                <div class="plan-time">
-                    {time_text}
-                </div>
-
-                <div class="plan-text">
-                    {detail}
-                </div>
-
-            </div>
-
-        </div>
-
-        """
-
-
-    plan_html += "</div>"
-
-
-    st.markdown(
-        plan_html,
-        unsafe_allow_html=True
-    )
-
-
-    # ========================================================
-    # SUN SCHEDULE
-    # ========================================================
-
-    sunrise = format_time(
-        daily["sunrise"][0]
-    )
-
-    sunset = format_time(
-        daily["sunset"][0]
-    )
-
-
-    st.markdown(
-        f"""
-
-        <div class="card">
-
-            <div class="card-title">
-                🌅 Sun Schedule
-            </div>
-
-            <div style="
-                display:flex;
-                justify-content:space-between;
-            ">
-
-                <div>
-
-                    <div class="muted small">
-                        Sunrise
-                    </div>
-
-                    <div style="
-                        color:#123B6D !important;
-                        font-weight:800;
-                    ">
-
-                        {sunrise}
-
-                    </div>
-
-                </div>
-
-
-                <div style="
-                    text-align:right;
-                ">
-
-                    <div class="muted small">
-                        Sunset
-                    </div>
-
-                    <div style="
-                        color:#123B6D !important;
-                        font-weight:800;
-                    ">
-
-                        {sunset}
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-# ============================================================
-# LIVE MAP
+# WEATHER METRICS
 # ============================================================
 
 st.markdown(
     '<div class="section-title">'
-    '🌍 Live Location Map'
+    '🌦️ Current Conditions'
     '</div>',
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
+)
+
+m1, m2, m3, m4 = st.columns(4)
+
+with m1:
+
+    st.markdown(
+        f"""
+        <div class="metric-box">
+            <div class="metric-value">
+                {temperature:.0f}°C
+            </div>
+            <div class="metric-label">
+                Temperature
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with m2:
+
+    st.markdown(
+        f"""
+        <div class="metric-box">
+            <div class="metric-value">
+                {humidity:.0f}%
+            </div>
+            <div class="metric-label">
+                Humidity
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with m3:
+
+    st.markdown(
+        f"""
+        <div class="metric-box">
+            <div class="metric-value">
+                {wind:.0f} km/h
+            </div>
+            <div class="metric-label">
+                Wind
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with m4:
+
+    st.markdown(
+        f"""
+        <div class="metric-box">
+            <div class="metric-value">
+                {uv_index:.0f}
+            </div>
+            <div class="metric-label">
+                UV Index
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# ============================================================
+# ROUTE & TRAVEL SECTION
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">'
+    '🚗 Route & Travel Weather'
+    '</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <div class="info-box">
+
+    Enter any destination. The app will calculate the
+    actual road route from your current location,
+    estimate distance and travel time, and analyze
+    weather conditions at multiple places along the route.
+
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 
-world_map = folium.Map(
+destination_text = st.text_input(
+    "🎯 Where do you want to go?",
+    placeholder=(
+        "Example: Vijayawada, Hyderabad, Chennai, "
+        "Bangalore, Mumbai, London..."
+    ),
+    key="destination_input"
+)
 
+route_col1, route_col2 = st.columns(
+    [2, 1]
+)
+
+with route_col1:
+
+    calculate_route_clicked = st.button(
+        "🚗 Calculate Route & Weather",
+        use_container_width=True
+    )
+
+with route_col2:
+
+    clear_route_clicked = st.button(
+        "🗑️ Clear Route",
+        use_container_width=True
+    )
+
+
+# ============================================================
+# CLEAR ROUTE
+# ============================================================
+
+if clear_route_clicked:
+
+    st.session_state.route_data = None
+    st.session_state.route_weather = None
+    st.session_state.destination_name = ""
+    st.session_state.destination_lat = None
+    st.session_state.destination_lon = None
+
+    st.rerun()
+
+
+# ============================================================
+# CALCULATE ROUTE
+# ============================================================
+
+if calculate_route_clicked:
+
+    destination = destination_text.strip()
+
+    if not destination:
+
+        st.warning(
+            "🎯 Please enter a destination."
+        )
+
+    else:
+
+        with st.spinner(
+            "🌍 Finding destination..."
+        ):
+
+            destination_result = search_location(
+                destination
+            )
+
+        if not destination_result:
+
+            st.error(
+                f"❌ Destination "
+                f"'{destination}' was not found."
+            )
+
+        else:
+
+            (
+                dest_lat,
+                dest_lon,
+                dest_name,
+                dest_country
+            ) = destination_result
+
+            if dest_country:
+
+                final_destination_name = (
+                    f"{dest_name}, "
+                    f"{dest_country}"
+                )
+
+            else:
+
+                final_destination_name = dest_name
+
+            with st.spinner(
+                "🛣️ Finding the actual road route..."
+            ):
+
+                route = get_route(
+                    latitude,
+                    longitude,
+                    float(dest_lat),
+                    float(dest_lon)
+                )
+
+            if route is None:
+
+                st.error(
+                    "❌ Could not calculate "
+                    "the road route."
+                )
+
+            else:
+
+                st.session_state.destination_name = (
+                    final_destination_name
+                )
+
+                st.session_state.destination_lat = (
+                    float(dest_lat)
+                )
+
+                st.session_state.destination_lon = (
+                    float(dest_lon)
+                )
+
+                st.session_state.route_data = route
+
+                # ------------------------------------------------
+                # Route locations
+                # ------------------------------------------------
+
+                with st.spinner(
+                    "📍 Finding places along your route..."
+                ):
+
+                    route_locations = (
+                        build_route_locations(
+                            route,
+                            latitude,
+                            longitude,
+                            float(dest_lat),
+                            float(dest_lon)
+                        )
+                    )
+
+                # ------------------------------------------------
+                # Route weather
+                # ------------------------------------------------
+
+                with st.spinner(
+                    "🌦️ Analyzing weather along your route..."
+                ):
+
+                    route_weather = (
+                        get_route_weather(
+                            route_locations,
+                            route["duration_s"]
+                        )
+                    )
+
+                st.session_state.route_weather = (
+                    route_weather
+                )
+
+                st.rerun()
+
+
+# ============================================================
+# DISPLAY ROUTE
+# ============================================================
+
+route = st.session_state.route_data
+route_weather = st.session_state.route_weather
+
+
+if route is not None:
+
+    distance_km = (
+        route["distance_m"] / 1000
+    )
+
+    duration_minutes = (
+        route["duration_s"] / 60
+    )
+
+    hours = int(
+        duration_minutes // 60
+    )
+
+    minutes = int(
+        duration_minutes % 60
+    )
+
+    if hours > 0:
+
+        duration_text = (
+            f"{hours} hr {minutes} min"
+        )
+
+    else:
+
+        duration_text = (
+            f"{minutes} min"
+        )
+
+
+    # ========================================================
+    # ROUTE HEADER
+    # ========================================================
+
+    st.markdown(
+        f"""
+        <div class="route-header">
+
+            <h2>
+                🚗 {st.session_state.location_name}
+                → {st.session_state.destination_name}
+            </h2>
+
+            <div class="route-stat">
+
+                <div class="route-stat-value">
+                    {distance_km:.1f} km
+                </div>
+
+                <div class="route-stat-label">
+                    📏 Distance
+                </div>
+
+            </div>
+
+            <div class="route-stat">
+
+                <div class="route-stat-value">
+                    {duration_text}
+                </div>
+
+                <div class="route-stat-label">
+                    ⏱️ Estimated travel time
+                </div>
+
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    # ========================================================
+    # ROUTE MAP
+    # ========================================================
+
+    st.markdown(
+        "### 🗺️ Actual Road Route"
+    )
+
+    route_map = folium.Map(
+        location=[
+            latitude,
+            longitude
+        ],
+        zoom_start=9,
+        tiles="OpenStreetMap"
+    )
+
+    # Route geometry
+
+    geometry = route.get(
+        "geometry",
+        {}
+    )
+
+    coordinates = geometry.get(
+        "coordinates",
+        []
+    )
+
+    if coordinates:
+
+        route_line = [
+            [
+                coordinate[1],
+                coordinate[0]
+            ]
+            for coordinate in coordinates
+        ]
+
+        folium.PolyLine(
+            route_line,
+            weight=6,
+            opacity=0.85,
+            tooltip=(
+                "🚗 Your calculated route"
+            )
+        ).add_to(route_map)
+
+
+    # Start marker
+
+    folium.Marker(
+        [
+            latitude,
+            longitude
+        ],
+        tooltip="📍 Start",
+        popup=(
+            f"<b>📍 Start</b><br>"
+            f"{st.session_state.location_name}"
+        ),
+        icon=folium.Icon(
+            color="green",
+            icon="play"
+        )
+    ).add_to(route_map)
+
+
+    # Destination marker
+
+    folium.Marker(
+        [
+            st.session_state.destination_lat,
+            st.session_state.destination_lon
+        ],
+        tooltip="🎯 Destination",
+        popup=(
+            f"<b>🎯 Destination</b><br>"
+            f"{st.session_state.destination_name}"
+        ),
+        icon=folium.Icon(
+            color="red",
+            icon="flag"
+        )
+    ).add_to(route_map)
+
+
+    # Weather route points
+
+    if route_weather:
+
+        for point in route_weather:
+
+            risk_text = point["risk"]
+
+            marker_color = "green"
+
+            if "🟡" in risk_text:
+                marker_color = "orange"
+
+            if "🔴" in risk_text:
+                marker_color = "red"
+
+            popup = f"""
+            <b>📍 {point['place']}</b><br>
+            🌡️ {point['temperature']:.0f}°C<br>
+            🌧️ Rain: {point['rain_probability']:.0f}%<br>
+            💨 Wind: {point['wind']:.0f} km/h<br>
+            💧 Humidity: {point['humidity']:.0f}%<br>
+            ☀️ UV: {point['uv']:.0f}<br>
+            {point['icon']} {point['condition']}<br>
+            {risk_text}
+            """
+
+            folium.CircleMarker(
+                [
+                    point["latitude"],
+                    point["longitude"]
+                ],
+                radius=8,
+                color=marker_color,
+                fill=True,
+                fill_opacity=0.85,
+                popup=popup
+            ).add_to(route_map)
+
+
+    st_folium(
+        route_map,
+        width=None,
+        height=520,
+        returned_objects=[]
+    )
+
+
+    # ========================================================
+    # ROUTE WEATHER TABLE
+    # ========================================================
+
+    st.markdown(
+        "### 🌦️ Weather Along Your Journey"
+    )
+
+    if route_weather:
+
+        table_data = []
+
+        for point in route_weather:
+
+            table_data.append({
+                "📍 Location":
+                    point["place"],
+
+                "📏 Distance":
+                    f"{point['distance_km']:.1f} km",
+
+                "🕐 ETA":
+                    point["estimated_time"].strftime(
+                        "%I:%M %p"
+                    ),
+
+                "🌡️ Temp":
+                    f"{point['temperature']:.0f}°C",
+
+                "🌧️ Rain":
+                    f"{point['rain_probability']:.0f}%",
+
+                "💨 Wind":
+                    f"{point['wind']:.0f} km/h",
+
+                "💧 Humidity":
+                    f"{point['humidity']:.0f}%",
+
+                "☀️ UV":
+                    f"{point['uv']:.0f}",
+
+                "🌦️ Condition":
+                    (
+                        f"{point['icon']} "
+                        f"{point['condition']}"
+                    ),
+
+                "Risk":
+                    point["risk"],
+            })
+
+        st.dataframe(
+            table_data,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    else:
+
+        st.warning(
+            "Route weather data could not be loaded."
+        )
+
+
+    # ========================================================
+    # ROUTE AI ADVICE
+    # ========================================================
+
+    analysis = analyze_route_weather(
+        route_weather
+    )
+
+    st.markdown(
+        "### 🤖 Journey Weather Advisor"
+    )
+
+    if "🔴" in analysis["risk"]:
+
+        st.markdown(
+            f"""
+            <div class="danger-box">
+
+            <h3>{analysis['risk']}</h3>
+
+            <p>
+            {analysis['message']}
+            </p>
+
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    elif "🟡" in analysis["risk"]:
+
+        st.markdown(
+            f"""
+            <div class="warning-box">
+
+            <h3>{analysis['risk']}</h3>
+
+            <p>
+            {analysis['message']}
+            </p>
+
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    else:
+
+        st.markdown(
+            f"""
+            <div class="good-box">
+
+            <h3>{analysis['risk']}</h3>
+
+            <p>
+            {analysis['message']}
+            </p>
+
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+
+    # ========================================================
+    # ADVICE
+    # ========================================================
+
+    st.markdown(
+        "### 🎒 AI Travel Advice"
+    )
+
+    for advice in analysis["advice"]:
+
+        st.write(
+            f"• {advice}"
+        )
+
+
+    # ========================================================
+    # EXTRA ROUTE WARNINGS
+    # ========================================================
+
+    if route_weather:
+
+        max_rain_point = max(
+            route_weather,
+            key=lambda x:
+            x["rain_probability"]
+        )
+
+        max_wind_point = max(
+            route_weather,
+            key=lambda x:
+            x["wind"]
+        )
+
+        max_temp_point = max(
+            route_weather,
+            key=lambda x:
+            x["temperature"]
+        )
+
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+
+            st.markdown(
+                f"""
+                <div class="metric-box">
+
+                <div class="metric-value">
+                    🌧️
+                    {max_rain_point['rain_probability']:.0f}%
+                </div>
+
+                <div class="metric-label">
+                    Highest rain chance<br>
+                    {max_rain_point['place']}
+                </div>
+
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with c2:
+
+            st.markdown(
+                f"""
+                <div class="metric-box">
+
+                <div class="metric-value">
+                    💨
+                    {max_wind_point['wind']:.0f}
+                    km/h
+                </div>
+
+                <div class="metric-label">
+                    Strongest wind<br>
+                    {max_wind_point['place']}
+                </div>
+
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with c3:
+
+            st.markdown(
+                f"""
+                <div class="metric-box">
+
+                <div class="metric-value">
+                    🌡️
+                    {max_temp_point['temperature']:.0f}°C
+                </div>
+
+                <div class="metric-label">
+                    Highest temperature<br>
+                    {max_temp_point['place']}
+                </div>
+
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+
+# ============================================================
+# ACTIVITY ADVISOR
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">'
+    '🏃 Personal Outdoor Advisor'
+    '</div>',
+    unsafe_allow_html=True
+)
+
+activity = st.selectbox(
+    "What are you planning to do?",
+    [
+        "Just going outside",
+        "Walking",
+        "Running",
+        "Playing sports",
+        "Travelling",
+        "Going to college",
+        "Going to work",
+        "Shopping",
+        "Outdoor event",
+    ]
+)
+
+
+def activity_advice(
+    activity,
+    temp,
+    rain_chance,
+    wind_speed,
+    uv
+):
+
+    if rain_chance >= 70:
+
+        return (
+            "🌧️ Rain is likely. "
+            "Carry an umbrella or raincoat."
+        )
+
+    if temp >= 40:
+
+        return (
+            "🔥 Very hot conditions. "
+            "Avoid long outdoor exposure."
+        )
+
+    if temp >= 35:
+
+        return (
+            "☀️ Hot conditions. "
+            "Carry water and avoid peak afternoon heat."
+        )
+
+    if wind_speed >= 35:
+
+        return (
+            "💨 Strong wind. "
+            "Be careful during outdoor activities."
+        )
+
+    if uv >= 8:
+
+        return (
+            "☀️ High UV. "
+            "Use sunscreen and protect your skin."
+        )
+
+    if activity == "Running":
+
+        return (
+            "🏃 Conditions are reasonably suitable "
+            "for running. Stay hydrated."
+        )
+
+    if activity == "Walking":
+
+        return (
+            "🚶 Good conditions for walking."
+        )
+
+    if activity == "Playing sports":
+
+        return (
+            "🏏 Outdoor sports look manageable. "
+            "Keep water with you."
+        )
+
+    if activity == "Travelling":
+
+        return (
+            "🚗 Travel conditions look generally good."
+        )
+
+    return (
+        "🟢 Conditions are generally comfortable "
+        "for outdoor activity."
+    )
+
+
+st.info(
+    activity_advice(
+        activity,
+        temperature,
+        max_rain_probability,
+        wind,
+        uv_index
+    )
+)
+
+
+# ============================================================
+# PERSONAL CHECKLIST
+# ============================================================
+
+st.markdown(
+    "### 🎒 Before You Go"
+)
+
+checklist = []
+
+if temperature >= 35:
+    checklist.append("💧 Carry enough water")
+
+if uv_index >= 6:
+    checklist.append("🧴 Sunscreen recommended")
+
+if max_rain_probability >= 50:
+    checklist.append("☔ Carry an umbrella/raincoat")
+
+if wind >= 30:
+    checklist.append("💨 Be careful with strong wind")
+
+if temperature <= 15:
+    checklist.append("🧥 Carry a light jacket")
+
+if not checklist:
+
+    checklist = [
+        "💧 Carry water",
+        "👕 Wear comfortable clothing",
+        "📱 Keep your phone charged",
+    ]
+
+for item in checklist:
+
+    st.write(
+        f"• {item}"
+    )
+
+
+# ============================================================
+# BEST TIME TO GO OUT
+# ============================================================
+
+st.markdown(
+    "### ⏰ Best Time to Go Outside"
+)
+
+hourly_times = hourly.get(
+    "time",
+    []
+)
+
+hourly_temp = hourly.get(
+    "temperature_2m",
+    []
+)
+
+hourly_uv = hourly.get(
+    "uv_index",
+    []
+)
+
+hourly_rain = hourly.get(
+    "precipitation_probability",
+    []
+)
+
+
+scores = []
+
+for i in range(
+    min(
+        24,
+        len(hourly_times)
+    )
+):
+
+    score = 100
+
+    temp_value = (
+        hourly_temp[i]
+        if i < len(hourly_temp)
+        else temperature
+    )
+
+    uv_value = (
+        hourly_uv[i]
+        if i < len(hourly_uv)
+        else uv_index
+    )
+
+    rain_value = (
+        hourly_rain[i]
+        if i < len(hourly_rain)
+        else 0
+    )
+
+    if temp_value > 35:
+        score -= 30
+
+    if temp_value < 18:
+        score -= 15
+
+    if uv_value >= 8:
+        score -= 25
+
+    if rain_value >= 70:
+        score -= 40
+
+    elif rain_value >= 40:
+        score -= 20
+
+    scores.append(
+        (
+            score,
+            hourly_times[i]
+        )
+    )
+
+
+if scores:
+
+    best_score, best_time = max(
+        scores,
+        key=lambda x: x[0]
+    )
+
+    st.success(
+        "🌤️ Suggested time: "
+        + format_time(best_time)
+    )
+
+
+# ============================================================
+# 7 DAY FORECAST
+# ============================================================
+
+st.markdown(
+    "### 📅 7-Day Forecast"
+)
+
+forecast_rows = []
+
+daily_times = daily.get(
+    "time",
+    []
+)
+
+daily_max = daily.get(
+    "temperature_2m_max",
+    []
+)
+
+daily_min = daily.get(
+    "temperature_2m_min",
+    []
+)
+
+daily_codes = daily.get(
+    "weather_code",
+    []
+)
+
+daily_rain = daily.get(
+    "precipitation_probability_max",
+    []
+)
+
+daily_uv = daily.get(
+    "uv_index_max",
+    []
+)
+
+for i in range(
+    min(7, len(daily_times))
+):
+
+    forecast_rows.append({
+        "Date":
+            daily_times[i],
+
+        "Condition":
+            (
+                weather_icon(
+                    daily_codes[i]
+                )
+                + " "
+                + weather_description(
+                    daily_codes[i]
+                )
+            ),
+
+        "Min":
+            f"{daily_min[i]:.0f}°C",
+
+        "Max":
+            f"{daily_max[i]:.0f}°C",
+
+        "Rain":
+            f"{daily_rain[i]:.0f}%",
+
+        "UV":
+            f"{daily_uv[i]:.0f}",
+    })
+
+
+st.dataframe(
+    forecast_rows,
+    use_container_width=True,
+    hide_index=True
+)
+
+
+# ============================================================
+# SUN SCHEDULE
+# ============================================================
+
+st.markdown(
+    "### 🌅 Sun Schedule"
+)
+
+sun_col1, sun_col2 = st.columns(2)
+
+sunrise = daily.get(
+    "sunrise",
+    []
+)
+
+sunset = daily.get(
+    "sunset",
+    []
+)
+
+with sun_col1:
+
+    if sunrise:
+
+        st.info(
+            "🌅 Sunrise: "
+            + format_time(
+                sunrise[0]
+            )
+        )
+
+with sun_col2:
+
+    if sunset:
+
+        st.info(
+            "🌇 Sunset: "
+            + format_time(
+                sunset[0]
+            )
+        )
+
+
+# ============================================================
+# LIVE LOCATION MAP
+# ============================================================
+
+st.markdown(
+    "### 🌍 Live Location Map"
+)
+
+world_map = folium.Map(
     location=[
         latitude,
         longitude
     ],
-
-    zoom_start=10,
-
-    tiles="OpenStreetMap",
-
+    zoom_start=7,
+    tiles="OpenStreetMap"
 )
 
-
-# ============================================================
-# CURRENT LOCATION MARKER
-# ============================================================
-
 folium.Marker(
-
     [
         latitude,
         longitude
     ],
-
-    tooltip=(
-        "📍 "
-        + st.session_state.location_name
-    ),
-
+    tooltip="📍 Current location",
     popup=(
-
         f"<b>📍 "
         f"{st.session_state.location_name}"
         f"</b><br>"
-
-        f"🌡️ {temperature:.0f}°C<br>"
-
-        f"{condition}<br>"
-
-        f"💧 Humidity: {humidity}%<br>"
-
-        f"💨 Wind: {wind:.0f} km/h<br>"
-
-        f"☀️ UV: {uv_index:.1f}"
-
+        f"{temperature:.0f}°C<br>"
+        f"{condition}"
     ),
-
     icon=folium.Icon(
         color="blue",
         icon="cloud"
-    ),
-
+    )
 ).add_to(world_map)
 
-
-st.markdown(
-    '<div class="map-wrap">',
-    unsafe_allow_html=True
-)
-
-
 st_folium(
-
     world_map,
-
     width=None,
-
     height=430,
-
-    returned_objects=[],
-
-)
-
-
-st.markdown(
-    "</div>",
-    unsafe_allow_html=True
+    returned_objects=[]
 )
 
 
 # ============================================================
-# 7-DAY FORECAST
+# AI PERSONAL SUMMARY
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">'
-    '📅 7-Day Forecast'
-    '</div>',
-    unsafe_allow_html=True,
+    "### 🤖 AI Personal Weather Summary"
 )
 
+summary_parts = []
 
-forecast_html = (
-    '<div class="forecast-grid">'
-)
+if temperature >= 35:
 
-
-for i in range(7):
-
-    day = daily["time"][i]
-
-
-    try:
-
-        date_obj = datetime.fromisoformat(
-            day
-        )
-
-        day_name = date_obj.strftime(
-            "%a"
-        )
-
-        date_name = date_obj.strftime(
-            "%d %b"
-        )
-
-    except Exception:
-
-        day_name = str(day)
-
-        date_name = ""
-
-
-    code = daily[
-        "weather_code"
-    ][i]
-
-    max_temp = daily[
-        "temperature_2m_max"
-    ][i]
-
-    min_temp = daily[
-        "temperature_2m_min"
-    ][i]
-
-    rain_chance = daily[
-        "precipitation_probability_max"
-    ][i]
-
-
-    today_class = (
-        " today"
-        if i == 0
-        else ""
-    )
-
-
-    forecast_html += f"""
-
-    <div class="forecast-card{today_class}">
-
-        <div class="forecast-day">
-            {day_name}
-        </div>
-
-        <div style="
-            color:#7893AD !important;
-            font-size:10px;
-            margin-top:2px;
-        ">
-
-            {date_name}
-
-        </div>
-
-        <div class="forecast-icon">
-            {weather_icon(code)}
-        </div>
-
-        <div class="forecast-temp">
-            {min_temp:.0f}° /
-            {max_temp:.0f}°C
-        </div>
-
-        <div class="forecast-rain">
-            🌧️ {rain_chance}%
-        </div>
-
-    </div>
-
-    """
-
-
-forecast_html += "</div>"
-
-
-st.markdown(
-    forecast_html,
-    unsafe_allow_html=True
-)
-
-
-# ============================================================
-# AI SUMMARY
-# ============================================================
-
-st.markdown(
-    '<div class="section-title">'
-    '🤖 AI Summary'
-    '</div>',
-    unsafe_allow_html=True,
-)
-
-
-summary_items = []
-
-
-if temperature >= 38:
-
-    summary_items.append(
-        "☀️ It is hot, so protect yourself from heat."
+    summary_parts.append(
+        "It is quite hot, so stay hydrated."
     )
 
 elif temperature <= 18:
 
-    summary_items.append(
-        "🧥 Temperatures are cool, "
-        "so consider an extra layer."
+    summary_parts.append(
+        "The weather is relatively cool."
     )
 
+else:
 
-if uv_index >= 6:
-
-    summary_items.append(
-        "🧴 UV is high, so sunscreen "
-        "and sun protection are recommended."
+    summary_parts.append(
+        "The temperature is generally comfortable."
     )
 
 
 if max_rain_probability >= 70:
 
-    summary_items.append(
-        "☂️ Rain is likely, so carry an umbrella."
+    summary_parts.append(
+        "Rain is likely in the coming hours."
+    )
+
+elif max_rain_probability >= 40:
+
+    summary_parts.append(
+        "There is some possibility of rain."
+    )
+
+else:
+
+    summary_parts.append(
+        "Rain probability is currently low."
     )
 
 
-if wind >= 40:
+if uv_index >= 8:
 
-    summary_items.append(
-        "💨 Wind is strong, so take care outdoors."
+    summary_parts.append(
+        "UV levels are high, so sunscreen is recommended."
+    )
+
+elif uv_index >= 6:
+
+    summary_parts.append(
+        "UV protection is recommended."
     )
 
 
-if weather_code >= 95:
+if wind >= 35:
 
-    summary_items.append(
-        "⛈️ Thunderstorm conditions are possible. "
-        "Avoid exposed outdoor areas."
+    summary_parts.append(
+        "Winds are strong, so take care outdoors."
     )
 
 
-if not summary_items:
-
-    summary_items.append(
-        "🟢 Weather conditions look generally comfortable."
-    )
-
-
-summary_text = " ".join(
-    summary_items
-)
-
-
-st.markdown(
-    f"""
-
-    <div class="ai-card">
-
-        <div class="ai-title">
-            🧠 Your Personal Weather Summary
-        </div>
-
-        <div class="ai-text">
-            {summary_text}
-        </div>
-
-    </div>
-
-    """,
-    unsafe_allow_html=True,
+st.info(
+    " ".join(summary_parts)
 )
 
 
@@ -2690,17 +2730,22 @@ st.markdown(
 
 st.markdown(
     """
+    <hr>
 
-    <div class="footer">
+    <div style="
+        text-align:center;
+        color:#78909c;
+        font-size:13px;
+        padding:15px;
+    ">
 
-        🌦️ AI Personal Weather Advisor
+    🌦️ AI Personal Weather Advisor<br>
 
-        &nbsp;•&nbsp;
+    Weather data powered by Open-Meteo<br>
 
-        Weather data powered by Open-Meteo
+    Route data powered by OpenStreetMap / OSRM
 
     </div>
-
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
