@@ -5,6 +5,7 @@ from streamlit_folium import st_folium
 from streamlit_js_eval import streamlit_js_eval
 from datetime import datetime
 
+
 # ============================================================
 # AI PERSONAL WEATHER ADVISOR
 # ============================================================
@@ -15,12 +16,27 @@ st.set_page_config(
     layout="wide"
 )
 
+
 # ============================================================
-# CSS
+# PROFESSIONAL DARK WEATHER THEME
 # ============================================================
 
 st.markdown("""
 <style>
+
+/* ============================================================
+   MAIN APPLICATION BACKGROUND
+   ============================================================ */
+
+.stApp {
+    background-color: #0B1220 !important;
+}
+
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
 
 /* ============================================================
    MAIN TITLE
@@ -31,32 +47,69 @@ st.markdown("""
     font-weight: 800;
     text-align: center;
     margin-bottom: 5px;
-    color: #ffffff !important;
+    color: #FFFFFF !important;
 }
 
 .subtitle {
     text-align: center;
-    color: #b8c0cc !important;
+    color: #B8C7DD !important;
     font-size: 18px;
     margin-bottom: 25px;
 }
 
 
 /* ============================================================
-   COMMON CARD
+   HEADINGS
+   ============================================================ */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: #FFFFFF !important;
+}
+
+
+/* ============================================================
+   NORMAL MARKDOWN
+   ============================================================ */
+
+/* IMPORTANT:
+   Do NOT use:
+   .stMarkdown { color: white; }
+
+   That was causing the visibility problem.
+*/
+
+.stMarkdown p {
+    color: #E5EDF8 !important;
+}
+
+
+/* ============================================================
+   COMMON WEATHER CARD
    ============================================================ */
 
 .card {
     padding: 20px;
     border-radius: 18px;
-    background: #f7f9fc;
-    border: 1px solid #e2e8f0;
+    background-color: #162235 !important;
+    border: 1px solid #2B405D !important;
     margin-bottom: 15px;
-    color: #1f2937 !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
-.card * {
-    color: #1f2937 !important;
+.card h2,
+.card h3,
+.card h4,
+.card b,
+.card p,
+.card span,
+.card div {
+    color: #FFFFFF !important;
 }
 
 
@@ -67,13 +120,18 @@ st.markdown("""
 .good {
     padding: 18px;
     border-radius: 15px;
-    background: #eaf8ef;
-    border: 1px solid #b7e4c7;
-    color: #14532d !important;
+    background-color: #123524 !important;
+    border: 1px solid #2E8B57 !important;
+    color: #FFFFFF !important;
+    margin-bottom: 15px;
 }
 
-.good * {
-    color: #14532d !important;
+.good h3,
+.good p,
+.good b,
+.good span,
+.good div {
+    color: #FFFFFF !important;
 }
 
 
@@ -84,13 +142,18 @@ st.markdown("""
 .warning {
     padding: 18px;
     border-radius: 15px;
-    background: #fff7df;
-    border: 1px solid #f0d98c;
-    color: #713f12 !important;
+    background-color: #3A2D0B !important;
+    border: 1px solid #D9A441 !important;
+    color: #FFFFFF !important;
+    margin-bottom: 15px;
 }
 
-.warning * {
-    color: #713f12 !important;
+.warning h3,
+.warning p,
+.warning b,
+.warning span,
+.warning div {
+    color: #FFFFFF !important;
 }
 
 
@@ -101,13 +164,18 @@ st.markdown("""
 .danger {
     padding: 18px;
     border-radius: 15px;
-    background: #fff0f0;
-    border: 1px solid #efb4b4;
-    color: #7f1d1d !important;
+    background-color: #3A1518 !important;
+    border: 1px solid #D9534F !important;
+    color: #FFFFFF !important;
+    margin-bottom: 15px;
 }
 
-.danger * {
-    color: #7f1d1d !important;
+.danger h3,
+.danger p,
+.danger b,
+.danger span,
+.danger div {
+    color: #FFFFFF !important;
 }
 
 
@@ -118,67 +186,54 @@ st.markdown("""
 .advice {
     padding: 20px;
     border-radius: 18px;
-    background: #eef7ff;
-    border: 1px solid #cfe8ff;
-    color: #12304a !important;
+    background-color: #122B4A !important;
+    border: 1px solid #2563EB !important;
+    color: #FFFFFF !important;
     margin-bottom: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.20);
 }
 
-.advice * {
-    color: #12304a !important;
+.advice h3,
+.advice h4,
+.advice p,
+.advice b,
+.advice span,
+.advice div {
+    color: #FFFFFF !important;
 }
 
 
 /* ============================================================
-   METRICS
+   METRIC CARDS
    ============================================================ */
 
+[data-testid="stMetric"] {
+    background-color: #162235 !important;
+    border: 1px solid #2B405D !important;
+    border-radius: 16px !important;
+    padding: 15px !important;
+}
+
 [data-testid="stMetricLabel"] {
-    color: #b8c0cc !important;
+    color: #B8C7DD !important;
 }
 
 [data-testid="stMetricValue"] {
-    color: #ffffff !important;
+    color: #FFFFFF !important;
+}
+
+[data-testid="stMetricDelta"] {
+    color: #B8C7DD !important;
 }
 
 
 /* ============================================================
-   STREAMLIT ALERTS
+   WIDGET LABELS
    ============================================================ */
 
-[data-testid="stAlert"] {
-    color: #1f2937 !important;
-}
-
-[data-testid="stAlert"] * {
-    color: #1f2937 !important;
-}
-
-
-/* ============================================================
-   INPUT LABELS
-   ============================================================ */
-
-label {
-    color: #ffffff !important;
-}
-
-
-/* ============================================================
-   CAPTIONS
-   ============================================================ */
-
-[data-testid="stCaptionContainer"] {
-    color: #b8c0cc !important;
-}
-
-
-/* ============================================================
-   SELECTBOX TEXT
-   ============================================================ */
-
-div[data-baseweb="select"] * {
-    color: #1f2937 !important;
+[data-testid="stWidgetLabel"] p {
+    color: #FFFFFF !important;
+    font-weight: 600;
 }
 
 
@@ -186,35 +241,129 @@ div[data-baseweb="select"] * {
    TEXT INPUT
    ============================================================ */
 
+div[data-baseweb="input"] {
+    background-color: #FFFFFF !important;
+    border-radius: 10px !important;
+}
+
 div[data-baseweb="input"] input {
-    color: #1f2937 !important;
+    color: #111827 !important;
+    background-color: #FFFFFF !important;
+}
+
+div[data-baseweb="input"] input::placeholder {
+    color: #64748B !important;
 }
 
 
 /* ============================================================
-   BUTTON TEXT
+   SELECT BOX
+   ============================================================ */
+
+div[data-baseweb="select"] {
+    background-color: #FFFFFF !important;
+    border-radius: 10px !important;
+}
+
+div[data-baseweb="select"] * {
+    color: #111827 !important;
+}
+
+
+/* ============================================================
+   SELECT BOX DROPDOWN
+   ============================================================ */
+
+div[role="listbox"] {
+    background-color: #FFFFFF !important;
+}
+
+div[role="option"] {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+}
+
+div[role="option"]:hover {
+    background-color: #E5EDF8 !important;
+    color: #111827 !important;
+}
+
+
+/* ============================================================
+   BUTTONS
    ============================================================ */
 
 .stButton button {
-    font-weight: 600;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
 }
 
 
 /* ============================================================
-   HEADINGS
+   SUCCESS / ERROR / WARNING ALERTS
    ============================================================ */
 
-h1, h2, h3, h4 {
-    color: #ffffff !important;
+[data-testid="stAlert"] {
+    border-radius: 12px !important;
+}
+
+[data-testid="stAlert"] p {
+    color: #FFFFFF !important;
 }
 
 
 /* ============================================================
-   GENERAL STREAMLIT TEXT
+   CAPTIONS
    ============================================================ */
 
-.stMarkdown {
-    color: #ffffff;
+[data-testid="stCaptionContainer"] p {
+    color: #9FB0C7 !important;
+}
+
+
+/* ============================================================
+   DIVIDER
+   ============================================================ */
+
+hr {
+    border-color: #263A55 !important;
+}
+
+
+/* ============================================================
+   CHECKBOX / RADIO TEXT
+   ============================================================ */
+
+[data-testid="stCheckbox"] label,
+[data-testid="stRadio"] label {
+    color: #FFFFFF !important;
+}
+
+
+/* ============================================================
+   LINKS
+   ============================================================ */
+
+a {
+    color: #60A5FA !important;
+}
+
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0B1220;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 10px;
 }
 
 </style>
@@ -427,7 +576,6 @@ def reverse_geocode(latitude, longitude):
             return name
 
     except Exception:
-
         pass
 
     return "Your Current Location"
@@ -470,7 +618,6 @@ def search_location(city):
             )
 
     except Exception:
-
         pass
 
     return None
@@ -571,7 +718,6 @@ with location_col2:
                 lat, lon, name, country = result
 
                 st.session_state.latitude = lat
-
                 st.session_state.longitude = lon
 
                 st.session_state.location_name = (
@@ -594,7 +740,6 @@ with location_col2:
 # ============================================================
 
 latitude = st.session_state.latitude
-
 longitude = st.session_state.longitude
 
 weather = get_weather(
@@ -603,7 +748,6 @@ weather = get_weather(
 )
 
 if weather is None:
-
     st.stop()
 
 
@@ -614,21 +758,13 @@ if weather is None:
 current = weather["current"]
 
 temperature = current["temperature_2m"]
-
 humidity = current["relative_humidity_2m"]
-
 feels_like = current["apparent_temperature"]
-
 precipitation = current["precipitation"]
-
 rain = current["rain"]
-
 wind = current["wind_speed_10m"]
-
 wind_gust = current["wind_gusts_10m"]
-
 uv_index = current["uv_index"]
-
 weather_code = current["weather_code"]
 
 condition = weather_description(
@@ -784,8 +920,7 @@ if temperature >= 40 or feels_like >= 42:
 
 elif temperature >= 35 or feels_like >= 38:
 
-    if risk_level != "danger":
-        risk_level = "warning"
+    risk_level = "warning"
 
     advice.append(
         "☀️ <b>Hot weather:</b> Limit long outdoor exposure."
@@ -823,7 +958,6 @@ if uv_index >= 8:
         "☀️ <b>UV:</b> Very high. Use sunscreen, sunglasses and sun protection."
     )
 
-
 elif uv_index >= 6:
 
     if risk_level == "good":
@@ -832,7 +966,6 @@ elif uv_index >= 6:
     advice.append(
         "🧴 <b>UV:</b> High. Sunscreen and sun protection are recommended."
     )
-
 
 elif uv_index >= 3:
 
@@ -865,20 +998,13 @@ if rain > 0:
 
 hourly = weather["hourly"]
 
-rain_probabilities = hourly[
-    "precipitation_probability"
-]
+rain_probabilities = hourly["precipitation_probability"]
 
 next_hours = rain_probabilities[:6]
 
 if next_hours:
-
-    max_rain_probability = max(
-        next_hours
-    )
-
+    max_rain_probability = max(next_hours)
 else:
-
     max_rain_probability = 0
 
 
@@ -895,7 +1021,6 @@ if max_rain_probability >= 70:
     advice.append(
         "☂️ <b>Umbrella:</b> Carry one before leaving."
     )
-
 
 elif max_rain_probability >= 40:
 
@@ -921,7 +1046,6 @@ if wind >= 50:
         "🏍️ <b>Travel:</b> Two-wheeler users should use extra caution."
     )
 
-
 elif wind >= 30:
 
     if risk_level == "good":
@@ -937,8 +1061,6 @@ elif wind >= 30:
 # ============================================================
 
 if risk_level == "good":
-
-    status_text = "🟢 GOOD TO GO"
 
     st.markdown(
         """
@@ -957,8 +1079,6 @@ if risk_level == "good":
 
 elif risk_level == "warning":
 
-    status_text = "🟡 GO WITH CAUTION"
-
     st.markdown(
         """
         <div class="warning">
@@ -975,8 +1095,6 @@ elif risk_level == "warning":
 
 else:
 
-    status_text = "🔴 AVOID / TAKE EXTRA CARE"
-
     st.markdown(
         """
         <div class="danger">
@@ -992,11 +1110,8 @@ else:
     )
 
 
-st.write("")
-
-
 # ============================================================
-# DISPLAY AI ADVICE
+# AI ADVICE DISPLAY
 # ============================================================
 
 for item in advice:
@@ -1205,37 +1320,24 @@ checklist = []
 
 
 if temperature >= 35 or uv_index >= 6:
-
     checklist.append("🧴 Sunscreen")
 
-
 if temperature >= 35:
-
     checklist.append("💧 Water bottle")
 
-
 if temperature >= 32 or uv_index >= 6:
-
     checklist.append("🧢 Cap / Hat")
 
-
 if uv_index >= 6:
-
     checklist.append("🕶️ Sunglasses")
 
-
 if max_rain_probability >= 50 or rain > 0:
-
     checklist.append("☂️ Umbrella")
 
-
 if temperature <= 18:
-
     checklist.append("🧥 Jacket")
 
-
 if not checklist:
-
     checklist.append(
         "🎒 No special weather equipment needed."
     )
@@ -1243,7 +1345,10 @@ if not checklist:
 
 for item in checklist:
 
-    st.write(f"• {item}")
+    st.markdown(
+        f"<p style='color:#E5EDF8 !important;'>• {item}</p>",
+        unsafe_allow_html=True
+    )
 
 
 # ============================================================
@@ -1275,25 +1380,20 @@ for i in range(
 
 
     if 20 <= temp <= 32:
-
         score += 3
 
     elif 18 <= temp <= 35:
-
         score += 1
 
 
     if uv <= 5:
-
         score += 2
 
 
     if rain_probability < 30:
-
         score += 2
 
     elif rain_probability < 60:
-
         score += 1
 
 
