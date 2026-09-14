@@ -35,9 +35,9 @@ st.markdown("""
     --blue-dark: #1769D0;
     --sky: #EAF6FF;
     --page: #F5FAFE;
-    --text: #173B68;
-    --text2: #315F86;
-    --muted: #6C88A3;
+    --text: #14532D;
+    --text2: #2F6B46;
+    --muted: #6B7F73;
     --border: #D5E8F6;
     --white: #FFFFFF;
 }
@@ -51,7 +51,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"],
 
 html, body {
     background: #F5FAFE !important;
-    color: #173B68 !important;
+    color: #14532D !important;
     color-scheme: light !important;
 }
 
@@ -60,7 +60,7 @@ html, body {
         radial-gradient(circle at 5% 0%, rgba(72, 169, 238, .18), transparent 25%),
         radial-gradient(circle at 95% 5%, rgba(111, 196, 255, .14), transparent 25%),
         linear-gradient(180deg, #EAF6FF 0%, #F6FBFF 45%, #FFFFFF 100%) !important;
-    color: #173B68 !important;
+    color: #14532D !important;
 }
 
 [data-testid="stAppViewContainer"] {
@@ -97,7 +97,7 @@ section.main {
 
 [data-testid="stWidgetLabel"] p,
 [data-testid="stWidgetLabel"] label {
-    color: #244B73 !important;
+    color: #245C3A !important;
 }
 
 /* ---------- HERO ---------- */
@@ -124,7 +124,7 @@ section.main {
 }
 
 .hero-title {
-    color: #123B6D !important;
+    color: #166534 !important;
     font-size: clamp(30px, 4vw, 48px);
     line-height: 1.05;
     font-weight: 800;
@@ -133,7 +133,7 @@ section.main {
 }
 
 .hero-subtitle {
-    color: #557796 !important;
+    color: #557B67 !important;
     font-size: 16px;
     font-weight: 500;
     margin-top: 9px;
@@ -145,7 +145,7 @@ section.main {
     padding: 7px 13px;
     border-radius: 999px;
     background: #E6F4FF;
-    color: #1769B5 !important;
+    color: #16834D !important;
     border: 1px solid #C7E4F8;
     font-size: 13px;
     font-weight: 700;
@@ -173,22 +173,22 @@ section.main {
     margin-bottom: 12px;
 
     /* Critical readability fix */
-    color: #173B68 !important;
+    color: #14532D !important;
 }
 
 .card * {
-    color: #173B68 !important;
+    color: #14532D !important;
 }
 
 .card-title {
-    color: #123B6D !important;
+    color: #166534 !important;
     font-size: 18px;
     font-weight: 800;
     margin-bottom: 12px;
 }
 
 .muted {
-    color: #6C88A3 !important;
+    color: #6B7F73 !important;
 }
 
 .small {
@@ -346,7 +346,7 @@ section.main {
 }
 
 .metric-box * {
-    color: #173B68 !important;
+    color: #14532D !important;
 }
 
 .metric-icon {
@@ -355,12 +355,12 @@ section.main {
 
 .metric-label {
     font-size: 11px;
-    color: #718BA5 !important;
+    color: #71847A !important;
     margin-top: 6px;
 }
 
 .metric-value {
-    color: #123B6D !important;
+    color: #166534 !important;
     font-size: 19px;
     font-weight: 800;
     margin-top: 2px;
@@ -374,21 +374,21 @@ section.main {
     border-radius: 20px;
     padding: 20px;
     box-shadow: 0 9px 24px rgba(33, 139, 230, .08);
-    color: #315F86 !important;
+    color: #2F6B46 !important;
 }
 
 .ai-card * {
-    color: #315F86 !important;
+    color: #2F6B46 !important;
 }
 
 .ai-title {
-    color: #174A7A !important;
+    color: #205B3A !important;
     font-weight: 800;
     font-size: 18px;
 }
 
 .ai-text {
-    color: #315F86 !important;
+    color: #2F6B46 !important;
     font-size: 14px;
     line-height: 1.7;
     margin-top: 12px;
@@ -402,12 +402,12 @@ section.main {
     gap: 11px;
     padding: 11px 4px;
     border-bottom: 1px solid #E8F0F6;
-    color: #244B73 !important;
+    color: #245C3A !important;
     font-size: 13px;
 }
 
 .check-item * {
-    color: #244B73 !important;
+    color: #245C3A !important;
 }
 
 .check-item:last-child {
@@ -422,7 +422,7 @@ section.main {
     align-items: center;
     justify-content: center;
     background: #E9F6FF;
-    color: #1976D2 !important;
+    color: #21834A !important;
 }
 
 /* ---------- PLAN ---------- */
@@ -439,13 +439,13 @@ section.main {
 }
 
 .plan-time {
-    color: #1769B5 !important;
+    color: #16834D !important;
     font-size: 12px;
     font-weight: 800;
 }
 
 .plan-text {
-    color: #365777 !important;
+    color: #496B59 !important;
     font-size: 12px;
     margin-top: 2px;
 }
@@ -453,7 +453,7 @@ section.main {
 /* ---------- SECTION TITLES ---------- */
 
 .section-title {
-    color: #123B6D !important;
+    color: #166534 !important;
     font-size: 22px;
     font-weight: 800;
     margin: 15px 0 10px;
@@ -478,7 +478,7 @@ section.main {
 }
 
 .forecast-card * {
-    color: #173B68 !important;
+    color: #14532D !important;
 }
 
 .forecast-card.today {
@@ -487,7 +487,7 @@ section.main {
 }
 
 .forecast-day {
-    color: #365777 !important;
+    color: #496B59 !important;
     font-size: 12px;
     font-weight: 800;
 }
@@ -498,13 +498,13 @@ section.main {
 }
 
 .forecast-temp {
-    color: #123B6D !important;
+    color: #166534 !important;
     font-size: 14px;
     font-weight: 800;
 }
 
 .forecast-rain {
-    color: #4E82A8 !important;
+    color: #54806A !important;
     font-size: 11px;
     margin-top: 7px;
 }
@@ -518,14 +518,14 @@ div[data-baseweb="input"] {
 }
 
 div[data-baseweb="input"] input {
-    color: #173B68 !important;
+    color: #14532D !important;
     background: #FFFFFF !important;
-    -webkit-text-fill-color: #173B68 !important;
+    -webkit-text-fill-color: #14532D !important;
 }
 
 div[data-baseweb="input"] input::placeholder {
-    color: #7893AD !important;
-    -webkit-text-fill-color: #7893AD !important;
+    color: #789083 !important;
+    -webkit-text-fill-color: #789083 !important;
 }
 
 div[data-baseweb="select"] {
@@ -535,13 +535,13 @@ div[data-baseweb="select"] {
 }
 
 div[data-baseweb="select"] * {
-    color: #173B68 !important;
+    color: #14532D !important;
 }
 
 div[role="listbox"],
 div[role="option"] {
     background: #FFFFFF !important;
-    color: #173B68 !important;
+    color: #14532D !important;
 }
 
 div[role="option"]:hover {
@@ -579,7 +579,7 @@ div[role="option"]:hover {
 
 [data-testid="stAlert"] p,
 [data-testid="stCaptionContainer"] p {
-    color: #315F86 !important;
+    color: #2F6B46 !important;
 }
 
 hr {
@@ -599,7 +599,7 @@ hr {
 
 .footer {
     text-align: center;
-    color: #7893AD !important;
+    color: #789083 !important;
     font-size: 12px;
     padding: 18px 0 5px;
 }
@@ -634,6 +634,53 @@ hr {
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+/* ---------- GREEN TEXT VISIBILITY OVERRIDE ---------- */
+.card,
+.card p,
+.card span,
+.card div,
+.card li,
+.card strong,
+.card b,
+.card em,
+.card small,
+.card-title,
+.section-title,
+.info-card,
+.advice-card,
+.forecast-card,
+.metric-card,
+.weather-detail {
+    color: #14532D !important;
+    -webkit-text-fill-color: #14532D !important;
+}
+
+.card-title,
+.section-title {
+    color: #166534 !important;
+}
+
+.muted,
+.card .muted {
+    color: #557B67 !important;
+    -webkit-text-fill-color: #557B67 !important;
+}
+
+/* Keep white text where it belongs: the blue weather hero */
+.weather-hero,
+.weather-hero p,
+.weather-hero span,
+.weather-hero div,
+.weather-hero strong,
+.weather-hero b,
+.weather-hero h1,
+.weather-hero h2,
+.weather-hero h3 {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
