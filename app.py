@@ -186,6 +186,24 @@ st.markdown(
         margin-bottom: 20px;
     }
 
+    .notification-box {
+        padding: 20px;
+        border-radius: 18px;
+        background: linear-gradient(
+            135deg,
+            #f4f9fc,
+            #eef7fb
+        );
+        border: 1px solid #d6e7ef;
+        margin: 15px 0;
+    }
+
+    .notification-title {
+        font-size: 22px;
+        font-weight: 700;
+        color: #183b56;
+    }
+
     .small-text {
         color: #718692;
         font-size: 13px;
@@ -236,6 +254,19 @@ if "destination_lat" not in st.session_state:
 
 if "destination_lon" not in st.session_state:
     st.session_state.destination_lon = None
+
+# Notification state
+if "notifications_enabled" not in st.session_state:
+    st.session_state.notifications_enabled = False
+
+if "notification_permission" not in st.session_state:
+    st.session_state.notification_permission = "default"
+
+if "last_notification_key" not in st.session_state:
+    st.session_state.last_notification_key = ""
+
+if "notification_sent" not in st.session_state:
+    st.session_state.notification_sent = False
 
 
 # ============================================================
@@ -320,6 +351,266 @@ def format_time(value):
 
 
 # ============================================================
+# NOTIFICATION HELPERS
+# ============================================================
+
+def get_weather_alert(
+    temperature,
+    feels_like,
+    rain_probability,
+    wind,
+    uv,
+    weather_code
+):
+    """
+    Determines the most important current weather alert.
+    """
+
+    # Thunderstorm
+    if weather_code in [95, 96, 99]:
+
+        return {
+            "level": "danger",
+            "title": "⛈️ Thunderstorm Warning",
+            "message": (
+                "Thunderstorm conditions are possible. "
+                "Avoid unnecessary outdoor activity."
+            ),
+        }
+
+    # Extreme heat
+    if temperature >= 40 or feels_like >= 42:
+
+        return {
+            "level": "danger",
+            "title": "🔥 Extreme Heat Warning",
+            "message": (
+                "Very hot conditions detected. "
+                "Drink plenty of water and avoid long "
+                "outdoor exposure."
+            ),
+        }
+
+    # Heavy rain
+    if rain_probability >= 85:
+
+        return {
+            "level": "danger",
+            "title": "🌧️ Heavy Rain Warning",
+            "message": (
+                "There is a very high chance of rain. "
+                "Carry rain protection and be careful outdoors."
+            ),
+        }
+
+    # Strong wind
+    if wind >= 50:
+
+        return {
+            "level": "danger",
+            "title": "💨 Strong Wind Warning",
+            "message": (
+                "Strong winds are expected. "
+                "Take care during outdoor activities and travel."
+            ),
+        }
+
+    # Very high UV
+    if uv >= 9:
+
+        return {
+            "level": "warning",
+            "title": "☀️ Very High UV Warning",
+            "message": (
+                "UV levels are very high. "
+                "Use sunscreen and avoid prolonged direct sunlight."
+            ),
+        }
+
+    # Heat
+    if temperature >= 35 or feels_like >= 38:
+
+        return {
+            "level": "warning",
+            "title": "🌡️ Heat Warning",
+            "message": (
+                "It is hot outside. Carry water and "
+                "avoid peak afternoon heat."
+            ),
+        }
+
+    # Rain
+    if rain_probability >= 70:
+
+        return {
+            "level": "warning",
+            "title": "🌧️ Rain Warning",
+            "message": (
+                "Rain is likely soon. "
+                "Carry an umbrella or raincoat."
+            ),
+        }
+
+    # Wind
+    if wind >= 30:
+
+        return {
+            "level": "warning",
+            "title": "💨 Wind Warning",
+            "message": (
+                "Strong winds are possible. "
+                "Take care outdoors."
+            ),
+        }
+
+    # UV
+    if uv >= 8:
+
+        return {
+            "level": "warning",
+            "title": "☀️ High UV Warning",
+            "message": (
+                "UV levels are high. "
+                "Use sunscreen and protect your skin."
+            ),
+        }
+
+    return {
+        "level": "normal",
+        "title": "🌤️ Weather Update",
+        "message": (
+            "Current weather conditions are generally comfortable."
+        ),
+    }
+
+
+def send_browser_notification(
+    title,
+    message,
+    location_name
+):
+    """
+    Shows a browser notification.
+
+    This works only when browser/OS permissions
+    allow the Notification API.
+    """
+
+    notification_key = (
+        f"{location_name}|{title}|{message}"
+    )
+
+    # Duplicate protection
+    if (
+        st.session_state.last_notification_key
+        == notification_key
+    ):
+        return
+
+    st.session_state.last_notification_key = (
+        notification_key
+    )
+
+    # Escape JavaScript strings safely
+    safe_title = (
+        title
+        .replace("\\", "\\\\")
+        .replace("'", "\\'")
+        .replace("\n", " ")
+    )
+
+    safe_message = (
+        message
+        .replace("\\", "\\\\")
+        .replace("'", "\\'")
+        .replace("\n", " ")
+    )
+
+    js_code = f"""
+    (async function() {{
+
+        try {{
+
+            if (!("Notification" in window)) {{
+
+                return {{
+                    status: "unsupported"
+                }};
+
+            }}
+
+            let permission =
+                Notification.permission;
+
+            if (permission === "default") {{
+
+                permission =
+                    await Notification.requestPermission();
+
+            }}
+
+            if (permission === "granted") {{
+
+                new Notification(
+                    '{safe_title}',
+                    {{
+                        body: '{safe_message}',
+                        icon: '🌦️',
+                        tag: 'weather-agent-alert'
+                    }}
+                );
+
+                return {{
+                    status: "sent"
+                }};
+
+            }}
+
+            return {{
+                status: permission
+            }};
+
+        }} catch (error) {{
+
+            return {{
+                status: "error",
+                message: String(error)
+            }};
+
+        }}
+
+    }})()
+    """
+
+    try:
+
+        result = streamlit_js_eval(
+            js_expressions=js_code,
+            want_output=True,
+            key=(
+                "notification_"
+                + str(
+                    abs(hash(notification_key))
+                )
+            )
+        )
+
+        if result:
+
+            if isinstance(result, dict):
+
+                st.session_state.notification_permission = (
+                    result.get(
+                        "status",
+                        "unknown"
+                    )
+                )
+
+    except Exception:
+        pass
+
+
+# ============================================================
 # OPEN-METEO WEATHER
 # ============================================================
 
@@ -383,6 +674,7 @@ def get_weather(latitude, longitude):
         return response.json()
 
     except Exception:
+
         return None
 
 
@@ -427,7 +719,10 @@ def search_location(city):
 
             data = response.json()
 
-            results = data.get("results", [])
+            results = data.get(
+                "results",
+                []
+            )
 
             if not results:
                 continue
@@ -485,6 +780,7 @@ def search_location(city):
                     )
 
         except Exception:
+
             continue
 
     return None
@@ -495,7 +791,12 @@ def search_location(city):
 # ============================================================
 
 @st.cache_data(ttl=600)
-def get_route(start_lat, start_lon, end_lat, end_lon):
+def get_route(
+    start_lat,
+    start_lon,
+    end_lat,
+    end_lon
+):
 
     url = (
         "https://router.project-osrm.org/"
@@ -525,7 +826,10 @@ def get_route(start_lat, start_lon, end_lat, end_lon):
         if data.get("code") != "Ok":
             return None
 
-        routes = data.get("routes", [])
+        routes = data.get(
+            "routes",
+            []
+        )
 
         if not routes:
             return None
@@ -533,32 +837,53 @@ def get_route(start_lat, start_lon, end_lat, end_lon):
         route = routes[0]
 
         return {
-            "distance_m": route.get("distance", 0),
-            "duration_s": route.get("duration", 0),
-            "geometry": route.get(
-                "geometry",
-                {}
-            ),
-            "legs": route.get("legs", []),
+            "distance_m":
+                route.get("distance", 0),
+
+            "duration_s":
+                route.get("duration", 0),
+
+            "geometry":
+                route.get(
+                    "geometry",
+                    {}
+                ),
+
+            "legs":
+                route.get(
+                    "legs",
+                    []
+                ),
         }
 
     except Exception:
+
         return None
 
 
 # ============================================================
-# DISTANCE CALCULATION
+# DISTANCE
 # ============================================================
 
-def haversine_distance(lat1, lon1, lat2, lon2):
+def haversine_distance(
+    lat1,
+    lon1,
+    lat2,
+    lon2
+):
 
     R = 6371.0
 
     p1 = math.radians(lat1)
     p2 = math.radians(lat2)
 
-    dp = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
+    dp = math.radians(
+        lat2 - lat1
+    )
+
+    dl = math.radians(
+        lon2 - lon1
+    )
 
     a = (
         math.sin(dp / 2) ** 2
@@ -588,14 +913,13 @@ def sample_route_points(
     if not coordinates:
         return []
 
-    # OSRM GeoJSON is:
-    # [longitude, latitude]
-
     points = []
 
     if len(coordinates) <= number_of_points:
 
-        for index, coordinate in enumerate(coordinates):
+        for index, coordinate in enumerate(
+            coordinates
+        ):
 
             points.append({
                 "index": index,
@@ -605,15 +929,23 @@ def sample_route_points(
 
         return points
 
-    step = (len(coordinates) - 1) / (
+    step = (
+        len(coordinates) - 1
+    ) / (
         number_of_points - 1
     )
 
-    for i in range(number_of_points):
+    for i in range(
+        number_of_points
+    ):
 
-        position = round(i * step)
+        position = round(
+            i * step
+        )
 
-        coordinate = coordinates[position]
+        coordinate = coordinates[
+            position
+        ]
 
         points.append({
             "index": i,
@@ -634,7 +966,10 @@ def reverse_geocode_route(
     longitude
 ):
 
-    url = "https://nominatim.openstreetmap.org/reverse"
+    url = (
+        "https://nominatim.openstreetmap.org/"
+        "reverse"
+    )
 
     params = {
         "lat": latitude,
@@ -646,7 +981,7 @@ def reverse_geocode_route(
 
     headers = {
         "User-Agent":
-        "AI-Personal-Weather-Advisor/1.0"
+            "AI-Personal-Weather-Advisor/1.0"
     }
 
     try:
@@ -686,8 +1021,9 @@ def reverse_geocode_route(
         )
 
         if display_name:
-
-            return display_name.split(",")[0]
+            return display_name.split(
+                ","
+            )[0]
 
     except Exception:
         pass
@@ -727,35 +1063,51 @@ def build_route_locations(
 
     route_locations = []
 
-    total_distance = route["distance_m"] / 1000
+    total_distance = (
+        route["distance_m"] / 1000
+    )
 
-    for i, point in enumerate(sample_points):
+    for i, point in enumerate(
+        sample_points
+    ):
 
         lat = point["latitude"]
         lon = point["longitude"]
 
         if i == 0:
 
-            place_name = "Starting Location"
+            place_name = (
+                "Starting Location"
+            )
+
             distance_km = 0
 
-        elif i == len(sample_points) - 1:
+        elif i == len(
+            sample_points
+        ) - 1:
 
             place_name = "Destination"
-            distance_km = total_distance
+
+            distance_km = (
+                total_distance
+            )
 
         else:
 
-            place_name = reverse_geocode_route(
-                lat,
-                lon
+            place_name = (
+                reverse_geocode_route(
+                    lat,
+                    lon
+                )
             )
 
-            distance_km = haversine_distance(
-                start_lat,
-                start_lon,
-                lat,
-                lon
+            distance_km = (
+                haversine_distance(
+                    start_lat,
+                    start_lon,
+                    lat,
+                    lon
+                )
             )
 
         route_locations.append({
@@ -765,12 +1117,14 @@ def build_route_locations(
             "distance_km": distance_km,
         })
 
-        # Small delay for public reverse-geocoding service
-        if 0 < i < len(sample_points) - 1:
+        if (
+            0 < i <
+            len(sample_points) - 1
+        ):
+
             time.sleep(0.8)
 
-    # Remove consecutive duplicate names
-
+    # Remove consecutive duplicates
     cleaned = []
 
     for item in route_locations:
@@ -779,7 +1133,8 @@ def build_route_locations(
             cleaned
             and
             cleaned[-1]["place"].lower()
-            == item["place"].lower()
+            ==
+            item["place"].lower()
         ):
 
             continue
@@ -790,7 +1145,7 @@ def build_route_locations(
 
 
 # ============================================================
-# ROUTE WEATHER
+# FIND NEAREST WEATHER HOUR
 # ============================================================
 
 def find_nearest_hour(
@@ -804,12 +1159,16 @@ def find_nearest_hour(
     best_index = 0
     best_difference = None
 
-    for i, value in enumerate(hourly_times):
+    for i, value in enumerate(
+        hourly_times
+    ):
 
         try:
 
-            current_time = datetime.fromisoformat(
-                value
+            current_time = (
+                datetime.fromisoformat(
+                    value
+                )
             )
 
             difference = abs(
@@ -829,10 +1188,15 @@ def find_nearest_hour(
                 best_index = i
 
         except Exception:
+
             continue
 
     return best_index
 
+
+# ============================================================
+# ROUTE WEATHER
+# ============================================================
 
 def get_route_weather(
     route_locations,
@@ -844,9 +1208,11 @@ def get_route_weather(
 
     start_time = datetime.now()
 
-    total_distance = route_locations[-1][
-        "distance_km"
-    ]
+    total_distance = (
+        route_locations[-1][
+            "distance_km"
+        ]
+    )
 
     results = []
 
@@ -918,7 +1284,10 @@ def get_route_weather(
                 and
                 hour_index < len(values)
             ):
-                return values[hour_index]
+
+                return values[
+                    hour_index
+                ]
 
             return default
 
@@ -986,7 +1355,6 @@ def get_route_weather(
         )
 
         # Risk
-
         risk = "🟢 Good"
 
         if (
@@ -1012,19 +1380,45 @@ def get_route_weather(
 
         results.append({
             **location,
-            "estimated_time": estimated_time,
-            "temperature": temperature,
-            "feels_like": feels_like,
-            "rain_probability": rain_probability,
-            "precipitation": precipitation,
-            "rain": rain,
-            "wind": wind,
-            "humidity": humidity,
-            "uv": uv,
-            "weather_code": code,
-            "condition": weather_description(code),
-            "icon": weather_icon(code),
-            "risk": risk,
+
+            "estimated_time":
+                estimated_time,
+
+            "temperature":
+                temperature,
+
+            "feels_like":
+                feels_like,
+
+            "rain_probability":
+                rain_probability,
+
+            "precipitation":
+                precipitation,
+
+            "rain":
+                rain,
+
+            "wind":
+                wind,
+
+            "humidity":
+                humidity,
+
+            "uv":
+                uv,
+
+            "weather_code":
+                code,
+
+            "condition":
+                weather_description(code),
+
+            "icon":
+                weather_icon(code),
+
+            "risk":
+                risk,
         })
 
     return results
@@ -1034,14 +1428,18 @@ def get_route_weather(
 # ROUTE AI ANALYSIS
 # ============================================================
 
-def analyze_route_weather(route_weather):
+def analyze_route_weather(
+    route_weather
+):
 
     if not route_weather:
 
         return {
             "risk": "🟢 Unknown",
+
             "message":
                 "Route weather data is unavailable.",
+
             "advice": [
                 "Check your route again.",
             ],
@@ -1053,9 +1451,11 @@ def analyze_route_weather(route_weather):
     for point in route_weather:
 
         if "🔴" in point["risk"]:
+
             high_risk.append(point)
 
         elif "🟡" in point["risk"]:
+
             caution.append(point)
 
     if high_risk:
@@ -1064,19 +1464,23 @@ def analyze_route_weather(route_weather):
 
         return {
             "risk": "🔴 High Risk",
+
             "message": (
                 "Weather conditions may become "
                 "unsafe during part of your journey."
             ),
+
             "advice": [
                 (
                     f"Be careful around "
                     f"{worst['place']}."
                 ),
+
                 (
                     "Check rain and wind conditions "
                     "before starting."
                 ),
+
                 (
                     "Consider delaying the journey "
                     "if severe weather is expected."
@@ -1090,38 +1494,48 @@ def analyze_route_weather(route_weather):
 
         return {
             "risk": "🟡 Moderate Risk",
+
             "message": (
                 "Most of the route looks manageable, "
                 "but some sections need caution."
             ),
+
             "advice": [
                 (
                     f"Take extra care around "
                     f"{first['place']}."
                 ),
+
                 "Carry water.",
+
                 "Keep an umbrella or rain protection.",
+
                 "Allow some extra travel time.",
             ],
         }
 
     return {
         "risk": "🟢 Good",
+
         "message": (
             "Weather conditions look generally "
             "favorable across the route."
         ),
+
         "advice": [
             "Carry drinking water.",
+
             "Use sunscreen during daytime.",
+
             "Wear comfortable/light clothing.",
+
             "Check the weather again before departure.",
         ],
     }
 
 
 # ============================================================
-# LOCATION SECTION
+# HEADER
 # ============================================================
 
 st.markdown(
@@ -1131,11 +1545,108 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+
+# ============================================================
+# NOTIFICATION SETTINGS
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">'
+    '🔔 Weather Notifications'
+    '</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <div class="notification-box">
+
+    <div class="notification-title">
+    📱 Device Weather Alerts
+    </div>
+
+    <p>
+    Get browser/device alerts for important weather
+    conditions such as rain, extreme heat, high UV,
+    strong wind and thunderstorms.
+    </p>
+
+    <p class="small-text">
+    Your browser will ask for notification permission
+    the first time you enable alerts.
+    </p>
+
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+notification_col1, notification_col2 = st.columns(
+    [2, 2]
+)
+
+with notification_col1:
+
+    enable_notifications = st.checkbox(
+        "🔔 Enable weather notifications",
+        value=st.session_state.notifications_enabled,
+        key="notification_checkbox"
+    )
+
+with notification_col2:
+
+    if st.button(
+        "🧪 Test Notification",
+        use_container_width=True
+    ):
+
+        if enable_notifications:
+
+            send_browser_notification(
+                "🌦️ Weather Agent Test",
+                (
+                    "Notifications are working. "
+                    "You will receive important weather alerts."
+                ),
+                st.session_state.location_name
+            )
+
+            st.success(
+                "🔔 Test notification requested."
+            )
+
+        else:
+
+            st.warning(
+                "Please enable notifications first."
+            )
+
+
+st.session_state.notifications_enabled = (
+    enable_notifications
+)
+
+if enable_notifications:
+
+    st.success(
+        "🔔 Weather notifications are enabled."
+    )
+
+else:
+
+    st.info(
+        "🔕 Weather notifications are currently disabled."
+    )
+
+
+# ============================================================
+# LOCATION SECTION
+# ============================================================
+
 st.markdown(
     '<div class="section-title">📍 Location</div>',
     unsafe_allow_html=True
 )
-
 
 st.markdown(
     '<div class="search-box">',
@@ -1227,9 +1738,10 @@ if search_clicked:
                 "search"
             )
 
-            # Reset previous route
             st.session_state.route_data = None
             st.session_state.route_weather = None
+
+            st.session_state.last_notification_key = ""
 
             st.rerun()
 
@@ -1294,7 +1806,9 @@ if current_clicked:
 
         })
         """,
+
         want_output=True,
+
         key="current_location"
     )
 
@@ -1327,6 +1841,8 @@ if current_clicked:
 
             st.session_state.route_data = None
             st.session_state.route_weather = None
+
+            st.session_state.last_notification_key = ""
 
             st.rerun()
 
@@ -1361,6 +1877,11 @@ if weather is None:
 current = weather["current"]
 hourly = weather["hourly"]
 daily = weather["daily"]
+
+
+# ============================================================
+# WEATHER VALUES
+# ============================================================
 
 temperature = current.get(
     "temperature_2m",
@@ -1430,12 +1951,37 @@ max_rain_probability = (
 
 
 # ============================================================
+# AUTOMATIC DEVICE WEATHER ALERT
+# ============================================================
+
+if st.session_state.notifications_enabled:
+
+    alert = get_weather_alert(
+        temperature,
+        feels_like,
+        max_rain_probability,
+        wind,
+        uv_index,
+        weather_code
+    )
+
+    if alert["level"] != "normal":
+
+        send_browser_notification(
+            alert["title"],
+            alert["message"],
+            st.session_state.location_name
+        )
+
+
+# ============================================================
 # LOCATION DISPLAY
 # ============================================================
 
 st.markdown(
     f"""
     <h2>📍 {st.session_state.location_name}</h2>
+
     <p class="small-text">
     Coordinates:
     {latitude:.4f}, {longitude:.4f}
@@ -1532,12 +2078,15 @@ with m1:
     st.markdown(
         f"""
         <div class="metric-box">
+
             <div class="metric-value">
                 {temperature:.0f}°C
             </div>
+
             <div class="metric-label">
                 Temperature
             </div>
+
         </div>
         """,
         unsafe_allow_html=True
@@ -1548,12 +2097,15 @@ with m2:
     st.markdown(
         f"""
         <div class="metric-box">
+
             <div class="metric-value">
                 {humidity:.0f}%
             </div>
+
             <div class="metric-label">
                 Humidity
             </div>
+
         </div>
         """,
         unsafe_allow_html=True
@@ -1564,12 +2116,15 @@ with m3:
     st.markdown(
         f"""
         <div class="metric-box">
+
             <div class="metric-value">
                 {wind:.0f} km/h
             </div>
+
             <div class="metric-label">
                 Wind
             </div>
+
         </div>
         """,
         unsafe_allow_html=True
@@ -1580,12 +2135,15 @@ with m4:
     st.markdown(
         f"""
         <div class="metric-box">
+
             <div class="metric-value">
                 {uv_index:.0f}
             </div>
+
             <div class="metric-label">
                 UV Index
             </div>
+
         </div>
         """,
         unsafe_allow_html=True
@@ -1616,7 +2174,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
 
 destination_text = st.text_input(
     "🎯 Where do you want to go?",
@@ -1746,10 +2303,7 @@ if calculate_route_clicked:
 
                 st.session_state.route_data = route
 
-                # ------------------------------------------------
                 # Route locations
-                # ------------------------------------------------
-
                 with st.spinner(
                     "📍 Finding places along your route..."
                 ):
@@ -1764,10 +2318,7 @@ if calculate_route_clicked:
                         )
                     )
 
-                # ------------------------------------------------
                 # Route weather
-                # ------------------------------------------------
-
                 with st.spinner(
                     "🌦️ Analyzing weather along your route..."
                 ):
@@ -1885,8 +2436,6 @@ if route is not None:
         tiles="OpenStreetMap"
     )
 
-    # Route geometry
-
     geometry = route.get(
         "geometry",
         {}
@@ -1955,7 +2504,7 @@ if route is not None:
     ).add_to(route_map)
 
 
-    # Weather route points
+    # Route weather points
 
     if route_weather:
 
@@ -1973,12 +2522,24 @@ if route is not None:
 
             popup = f"""
             <b>📍 {point['place']}</b><br>
+
             🌡️ {point['temperature']:.0f}°C<br>
-            🌧️ Rain: {point['rain_probability']:.0f}%<br>
-            💨 Wind: {point['wind']:.0f} km/h<br>
-            💧 Humidity: {point['humidity']:.0f}%<br>
-            ☀️ UV: {point['uv']:.0f}<br>
-            {point['icon']} {point['condition']}<br>
+
+            🌧️ Rain:
+            {point['rain_probability']:.0f}%<br>
+
+            💨 Wind:
+            {point['wind']:.0f} km/h<br>
+
+            💧 Humidity:
+            {point['humidity']:.0f}%<br>
+
+            ☀️ UV:
+            {point['uv']:.0f}<br>
+
+            {point['icon']}
+            {point['condition']}<br>
+
             {risk_text}
             """
 
@@ -2018,6 +2579,7 @@ if route is not None:
         for point in route_weather:
 
             table_data.append({
+
                 "📍 Location":
                     point["place"],
 
@@ -2065,6 +2627,66 @@ if route is not None:
         st.warning(
             "Route weather data could not be loaded."
         )
+
+
+    # ========================================================
+    # ROUTE NOTIFICATION
+    # ========================================================
+
+    if (
+        st.session_state.notifications_enabled
+        and route_weather
+    ):
+
+        route_high_risk = [
+            point
+            for point in route_weather
+            if "🔴" in point["risk"]
+        ]
+
+        route_caution = [
+            point
+            for point in route_weather
+            if "🟡" in point["risk"]
+        ]
+
+        if route_high_risk:
+
+            worst = route_high_risk[0]
+
+            send_browser_notification(
+                "🛣️ Route Weather Warning",
+                (
+                    f"High-risk weather near "
+                    f"{worst['place']}. "
+                    f"{worst['condition']}, "
+                    f"rain {worst['rain_probability']:.0f}%, "
+                    f"wind {worst['wind']:.0f} km/h."
+                ),
+                (
+                    st.session_state.location_name
+                    + " → "
+                    + st.session_state.destination_name
+                )
+            )
+
+        elif route_caution:
+
+            first = route_caution[0]
+
+            send_browser_notification(
+                "🛣️ Route Weather Caution",
+                (
+                    f"Weather needs caution near "
+                    f"{first['place']}. "
+                    f"Check conditions before travelling."
+                ),
+                (
+                    st.session_state.location_name
+                    + " → "
+                    + st.session_state.destination_name
+                )
+            )
 
 
     # ========================================================
@@ -2132,7 +2754,7 @@ if route is not None:
 
 
     # ========================================================
-    # ADVICE
+    # TRAVEL ADVICE
     # ========================================================
 
     st.markdown(
@@ -2361,19 +2983,34 @@ st.markdown(
 checklist = []
 
 if temperature >= 35:
-    checklist.append("💧 Carry enough water")
+
+    checklist.append(
+        "💧 Carry enough water"
+    )
 
 if uv_index >= 6:
-    checklist.append("🧴 Sunscreen recommended")
+
+    checklist.append(
+        "🧴 Sunscreen recommended"
+    )
 
 if max_rain_probability >= 50:
-    checklist.append("☔ Carry an umbrella/raincoat")
+
+    checklist.append(
+        "☔ Carry an umbrella/raincoat"
+    )
 
 if wind >= 30:
-    checklist.append("💨 Be careful with strong wind")
+
+    checklist.append(
+        "💨 Be careful with strong wind"
+    )
 
 if temperature <= 15:
-    checklist.append("🧥 Carry a light jacket")
+
+    checklist.append(
+        "🧥 Carry a light jacket"
+    )
 
 if not checklist:
 
@@ -2417,7 +3054,6 @@ hourly_rain = hourly.get(
     "precipitation_probability",
     []
 )
-
 
 scores = []
 
@@ -2525,10 +3161,14 @@ daily_uv = daily.get(
 )
 
 for i in range(
-    min(7, len(daily_times))
+    min(
+        7,
+        len(daily_times)
+    )
 ):
 
     forecast_rows.append({
+
         "Date":
             daily_times[i],
 
@@ -2722,6 +3362,68 @@ if wind >= 35:
 st.info(
     " ".join(summary_parts)
 )
+
+
+# ============================================================
+# NOTIFICATION STATUS
+# ============================================================
+
+if st.session_state.notifications_enabled:
+
+    alert = get_weather_alert(
+        temperature,
+        feels_like,
+        max_rain_probability,
+        wind,
+        uv_index,
+        weather_code
+    )
+
+    if alert["level"] == "danger":
+
+        st.markdown(
+            f"""
+            <div class="danger-box">
+
+            <h3>
+            🔔 Active Weather Alert
+            </h3>
+
+            <p>
+            <b>{alert['title']}</b>
+            </p>
+
+            <p>
+            {alert['message']}
+            </p>
+
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    elif alert["level"] == "warning":
+
+        st.markdown(
+            f"""
+            <div class="warning-box">
+
+            <h3>
+            🔔 Weather Advisory
+            </h3>
+
+            <p>
+            <b>{alert['title']}</b>
+            </p>
+
+            <p>
+            {alert['message']}
+            </p>
+
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 
 # ============================================================
