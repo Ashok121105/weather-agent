@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import math
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -35,13 +36,14 @@ REQUEST_TIMEOUT = 20
 
 # ============================================================
 # CUSTOM CSS
-# DARK + LIGHT THEME SAFE
+# DARK + LIGHT THEME FRIENDLY
 # ============================================================
 
 st.markdown(
     """
     <style>
 
+    /* Main title */
     .main-title {
         font-size: 42px;
         font-weight: 800;
@@ -51,23 +53,25 @@ st.markdown(
     .sub-title {
         font-size: 18px;
         margin-bottom: 25px;
+        opacity: 0.75;
     }
 
+    /* Cards automatically follow Streamlit theme */
     .weather-card,
     .advice-card,
     .route-card,
     .danger-card,
     .success-card,
     .warning-card,
-    .night-card {
-        color: inherit !important;
+    .time-card {
+        color: var(--text-color, inherit);
     }
 
     .weather-card {
         padding: 20px;
         border-radius: 18px;
-        background: rgba(100, 160, 220, 0.12);
-        border: 1px solid rgba(100, 160, 220, 0.30);
+        background: rgba(100, 160, 220, 0.10);
+        border: 1px solid rgba(120, 160, 210, 0.30);
         margin-bottom: 15px;
     }
 
@@ -75,62 +79,95 @@ st.markdown(
         padding: 18px;
         border-radius: 16px;
         margin-top: 10px;
-        border: 1px solid rgba(128,128,128,0.30);
-        background: rgba(128,128,128,0.08);
+        border: 1px solid rgba(128, 128, 128, 0.25);
+        background: rgba(128, 128, 128, 0.07);
     }
 
     .route-card {
         padding: 18px;
         border-radius: 16px;
-        border: 1px solid rgba(128,128,128,0.30);
-        background: rgba(128,128,128,0.08);
+        border: 1px solid rgba(128, 128, 128, 0.25);
+        background: rgba(128, 128, 128, 0.07);
         margin-bottom: 12px;
     }
 
     .danger-card {
         padding: 18px;
         border-radius: 16px;
-        background: rgba(220, 50, 60, 0.12);
-        border: 1px solid rgba(220, 50, 60, 0.35);
+        background: rgba(255, 70, 70, 0.10);
+        border: 1px solid rgba(255, 80, 80, 0.35);
     }
 
     .success-card {
         padding: 18px;
         border-radius: 16px;
-        background: rgba(40, 180, 90, 0.12);
-        border: 1px solid rgba(40, 180, 90, 0.35);
+        background: rgba(50, 200, 100, 0.10);
+        border: 1px solid rgba(50, 200, 100, 0.30);
     }
 
     .warning-card {
         padding: 18px;
         border-radius: 16px;
-        background: rgba(230, 170, 30, 0.12);
-        border: 1px solid rgba(230, 170, 30, 0.35);
+        background: rgba(255, 190, 50, 0.10);
+        border: 1px solid rgba(255, 190, 50, 0.35);
     }
 
-    .night-card {
+    .time-card {
         padding: 18px;
         border-radius: 16px;
-        background: rgba(80, 90, 160, 0.15);
-        border: 1px solid rgba(100, 110, 190, 0.35);
+        background: rgba(100, 140, 220, 0.10);
+        border: 1px solid rgba(100, 140, 220, 0.25);
+        margin-bottom: 15px;
+    }
+
+    .big-time {
+        font-size: 30px;
+        font-weight: 800;
+    }
+
+    .time-period {
+        font-size: 22px;
+        font-weight: 700;
     }
 
     .metric-box {
         padding: 14px;
         border-radius: 12px;
-        background: rgba(128,128,128,0.08);
+        background: rgba(128, 128, 128, 0.08);
         text-align: center;
-        border: 1px solid rgba(128,128,128,0.25);
+        border: 1px solid rgba(128, 128, 128, 0.20);
     }
 
-    .time-badge {
-        display: inline-block;
-        padding: 7px 14px;
-        border-radius: 20px;
-        background: rgba(100, 140, 220, 0.15);
-        border: 1px solid rgba(100, 140, 220, 0.30);
-        font-weight: 600;
-        margin-bottom: 12px;
+    /* Make markdown text inside cards inherit theme */
+    .weather-card h1,
+    .weather-card h2,
+    .weather-card h3,
+    .weather-card p,
+    .advice-card h1,
+    .advice-card h2,
+    .advice-card h3,
+    .advice-card p,
+    .route-card h1,
+    .route-card h2,
+    .route-card h3,
+    .route-card p,
+    .danger-card h1,
+    .danger-card h2,
+    .danger-card h3,
+    .danger-card p,
+    .success-card h1,
+    .success-card h2,
+    .success-card h3,
+    .success-card p,
+    .warning-card h1,
+    .warning-card h2,
+    .warning-card h3,
+    .warning-card p,
+    .time-card h1,
+    .time-card h2,
+    .time-card h3,
+    .time-card p {
+        color: var(--text-color, inherit) !important;
     }
 
     </style>
@@ -148,14 +185,13 @@ defaults = {
     "current_weather": None,
     "destination": None,
     "destination_results": [],
-    "destination_weather": None,
     "routes": [],
     "selected_route": None,
     "route_weather": [],
     "last_route_key": None,
     "location_requested": False,
     "map_last_clicked": None,
-    "last_destination_query": "",
+    "destination_weather": None,
 }
 
 for key, value in defaults.items():
@@ -169,7 +205,10 @@ for key, value in defaults.items():
 
 def weather_description(code):
 
-    code = int(code)
+    try:
+        code = int(code)
+    except Exception:
+        code = 0
 
     weather_codes = {
         0: ("Clear sky", "☀️"),
@@ -209,10 +248,10 @@ def weather_description(code):
 
 
 # ============================================================
-# SAFE HTTP REQUEST
+# HTTP HELPER
 # ============================================================
 
-def safe_get(url, params=None, headers=None, show_error=True):
+def safe_get(url, params=None, headers=None):
 
     try:
 
@@ -229,21 +268,23 @@ def safe_get(url, params=None, headers=None, show_error=True):
 
     except requests.RequestException as e:
 
-        if show_error:
-            st.error(f"Network/API error: {e}")
+        st.error(
+            f"Network/API error: {e}"
+        )
 
         return None
 
     except Exception as e:
 
-        if show_error:
-            st.error(f"Unexpected error: {e}")
+        st.error(
+            f"Unexpected error: {e}"
+        )
 
         return None
 
 
 # ============================================================
-# BROWSER LOCATION
+# GET BROWSER LOCATION
 # ============================================================
 
 def get_browser_location():
@@ -266,8 +307,13 @@ def get_browser_location():
             {}
         )
 
-        latitude = coords.get("latitude")
-        longitude = coords.get("longitude")
+        latitude = coords.get(
+            "latitude"
+        )
+
+        longitude = coords.get(
+            "longitude"
+        )
 
         if latitude is None or longitude is None:
             return None
@@ -286,7 +332,6 @@ def get_browser_location():
 # REVERSE GEOCODING
 # ============================================================
 
-@st.cache_data(ttl=86400, show_spinner=False)
 def reverse_geocode(latitude, longitude):
 
     params = {
@@ -365,8 +410,8 @@ def reverse_geocode(latitude, longitude):
 def create_start_location(latitude, longitude):
 
     place = reverse_geocode(
-        round(latitude, 6),
-        round(longitude, 6)
+        latitude,
+        longitude
     )
 
     return {
@@ -374,8 +419,7 @@ def create_start_location(latitude, longitude):
         "state": place["state"],
         "country": place["country"],
         "latitude": float(latitude),
-        "longitude": float(longitude),
-        "display_name": place["display_name"]
+        "longitude": float(longitude)
     }
 
 
@@ -383,20 +427,18 @@ def create_start_location(latitude, longitude):
 # DESTINATION SEARCH
 # ============================================================
 
-@st.cache_data(ttl=86400, show_spinner=False)
 def geocode_place(place):
 
     params = {
         "name": place,
-        "count": 5,
+        "count": 10,
         "language": "en",
         "format": "json"
     }
 
     data = safe_get(
         OPEN_METEO_GEOCODING,
-        params,
-        show_error=False
+        params
     )
 
     if not data:
@@ -431,7 +473,7 @@ def geocode_place(place):
                 ),
                 "timezone": item.get(
                     "timezone",
-                    "auto"
+                    "UTC"
                 )
             }
         )
@@ -440,14 +482,12 @@ def geocode_place(place):
 
 
 # ============================================================
-# WEATHER API
+# GET WEATHER
 # ============================================================
 
-@st.cache_data(ttl=600, show_spinner=False)
 def get_weather(latitude, longitude):
 
     params = {
-
         "latitude": latitude,
         "longitude": longitude,
 
@@ -483,20 +523,19 @@ def get_weather(latitude, longitude):
 
     return safe_get(
         OPEN_METEO_WEATHER,
-        params,
-        show_error=False
+        params
     )
 
 
 # ============================================================
-# POINT WEATHER
+# GET POINT WEATHER
 # ============================================================
 
 def get_point_weather(latitude, longitude):
 
     data = get_weather(
-        round(latitude, 5),
-        round(longitude, 5)
+        latitude,
+        longitude
     )
 
     if not data:
@@ -567,157 +606,185 @@ def get_point_weather(latitude, longitude):
             "uv_index"
         ),
 
-        "timezone": data.get(
-            "timezone",
-            "UTC"
-        ),
-
         "hourly": data.get(
             "hourly",
             {}
+        ),
+
+        "timezone": data.get(
+            "timezone",
+            "UTC"
         )
     }
 
 
 # ============================================================
-# TIME OF DAY
+# AUTOMATIC TIME PERIOD
 # ============================================================
 
-def get_time_information(weather):
-
-    if not weather:
-        return {
-            "period": "Unknown",
-            "icon": "🕐",
-            "time": "Unknown",
-            "hour": None
-        }
-
-    timezone_name = weather.get(
-        "timezone",
-        "UTC"
-    )
+def get_time_period(timezone_name):
 
     try:
 
-        local_now = datetime.now(
+        local_time = datetime.now(
             ZoneInfo(timezone_name)
         )
 
     except Exception:
 
-        local_now = datetime.now()
+        local_time = datetime.now()
 
-    hour = local_now.hour
+    hour = local_time.hour
 
-    if 0 <= hour < 5:
+    if 0 <= hour < 4:
 
-        period = "Midnight"
-        icon = "🌌"
+        period = "🌙 Midnight"
 
-    elif 5 <= hour < 12:
+        advice = (
+            "It is midnight. Avoid unnecessary outdoor travel "
+            "and stay alert if you must go outside."
+        )
 
-        period = "Morning"
-        icon = "🌅"
+    elif 4 <= hour < 6:
+
+        period = "🌅 Early Morning"
+
+        advice = (
+            "It is early morning. Visibility may be lower, "
+            "so be careful while walking or riding."
+        )
+
+    elif 6 <= hour < 12:
+
+        period = "🌄 Morning"
+
+        advice = (
+            "It is morning. This is a good time to plan "
+            "your outdoor activities based on the latest weather."
+        )
 
     elif 12 <= hour < 17:
 
-        period = "Afternoon"
-        icon = "☀️"
+        period = "☀️ Afternoon"
 
-    elif 17 <= hour < 21:
+        advice = (
+            "It is afternoon. Heat and UV exposure may be "
+            "stronger, so check temperature and UV conditions."
+        )
 
-        period = "Evening"
-        icon = "🌇"
+    elif 17 <= hour < 20:
+
+        period = "🌇 Evening"
+
+        advice = (
+            "It is evening. Check rain and wind conditions "
+            "before travelling or going outside."
+        )
 
     else:
 
-        period = "Night"
-        icon = "🌙"
+        period = "🌙 Night"
+
+        advice = (
+            "It is night. Visibility is lower, so use extra "
+            "care while walking, driving or riding."
+        )
 
     return {
+        "datetime": local_time,
         "period": period,
-        "icon": icon,
-        "time": local_now.strftime("%I:%M %p"),
-        "hour": hour
+        "advice": advice
     }
 
 
 # ============================================================
-# WEATHER CATEGORY HELPERS
+# NEXT FEW HOURS RAIN CHECK
 # ============================================================
 
-def is_rainy(weather):
+def get_near_term_rain_info(weather):
 
     if not weather:
-        return False
-
-    code = weather.get(
-        "weather_code",
-        0
-    )
-
-    rain = weather.get(
-        "rain",
-        0
-    ) or 0
-
-    showers = weather.get(
-        "showers",
-        0
-    ) or 0
-
-    return (
-        code in {
-            51, 53, 55,
-            56, 57,
-            61, 63, 65,
-            66, 67,
-            80, 81, 82,
-            95, 96, 99
+        return {
+            "rain_expected": False,
+            "max_probability": 0,
+            "total_rain": 0
         }
-        or rain > 0
-        or showers > 0
+
+    hourly = weather.get(
+        "hourly",
+        {}
     )
 
+    probabilities = hourly.get(
+        "precipitation_probability",
+        []
+    )
 
-def is_storm(weather):
+    precipitation = hourly.get(
+        "precipitation",
+        []
+    )
 
-    if not weather:
-        return False
+    max_probability = 0
 
-    return weather.get(
-        "weather_code",
-        0
-    ) in {
-        95, 96, 99
-    }
+    if probabilities:
 
+        try:
 
-def is_foggy(weather):
+            max_probability = max(
+                [
+                    float(x)
+                    for x in probabilities[:6]
+                    if x is not None
+                ]
+            )
 
-    if not weather:
-        return False
+        except Exception:
 
-    return weather.get(
-        "weather_code",
-        0
-    ) in {
-        45, 48
+            max_probability = 0
+
+    total_rain = 0
+
+    if precipitation:
+
+        try:
+
+            total_rain = sum(
+                [
+                    float(x)
+                    for x in precipitation[:6]
+                    if x is not None
+                ]
+            )
+
+        except Exception:
+
+            total_rain = 0
+
+    return {
+        "rain_expected": (
+            max_probability >= 40
+            or total_rain > 0
+        ),
+        "max_probability": max_probability,
+        "total_rain": total_rain
     }
 
 
 # ============================================================
-# SMART DAILY LIFE ADVICE
+# SMART DAILY-LIFE ADVICE
 # ============================================================
 
-def generate_daily_advice(weather):
+def generate_daily_advice(weather, timezone="UTC"):
 
     if not weather:
 
         return {
             "level": "warning",
-            "title": "Weather information unavailable",
+
+            "title":
+                "Weather information unavailable",
+
             "items": [
                 "Weather data could not be retrieved.",
                 "Check your internet connection and try again."
@@ -726,6 +793,10 @@ def generate_daily_advice(weather):
 
     temp = weather.get(
         "temperature"
+    )
+
+    feels = weather.get(
+        "feels_like"
     )
 
     rain = weather.get(
@@ -763,93 +834,95 @@ def generate_daily_advice(weather):
         0
     )
 
-    time_info = get_time_information(
+    time_info = get_time_period(
+        timezone
+    )
+
+    rain_info = get_near_term_rain_info(
         weather
     )
 
-    period = time_info["period"]
-
     advice = []
 
-    # --------------------------------------------------------
-    # TIME BASED
-    # --------------------------------------------------------
+    rainy_codes = {
+        51, 53, 55,
+        56, 57,
+        61, 63, 65,
+        66, 67,
+        80, 81, 82,
+        95, 96, 99
+    }
 
-    if period == "Morning":
-
-        advice.append(
-            "🌅 Good morning. If you are going out now, "
-            "check the weather before starting your journey."
-        )
-
-    elif period == "Afternoon":
-
-        advice.append(
-            "☀️ It is afternoon. Outdoor heat and UV exposure "
-            "may be stronger during this part of the day."
-        )
-
-    elif period == "Evening":
-
-        advice.append(
-            "🌇 It is evening. Visibility may reduce later, "
-            "so keep that in mind if you are travelling."
-        )
-
-    elif period == "Night":
-
-        advice.append(
-            "🌙 It is night. If you are travelling, use "
-            "extra caution because visibility is lower."
-        )
-
-    elif period == "Midnight":
-
-        advice.append(
-            "🌌 It is around midnight. Avoid unnecessary travel "
-            "and take extra care if you must go outside."
-        )
+    storm_codes = {
+        95, 96, 99
+    }
 
     # --------------------------------------------------------
-    # TEMPERATURE
+    # TIME
     # --------------------------------------------------------
 
-    if temp is not None:
+    advice.append(
+        f"{time_info['period']}: "
+        f"{time_info['advice']}"
+    )
 
-        if temp >= 40:
+    # --------------------------------------------------------
+    # VERY HOT
+    # --------------------------------------------------------
 
-            advice.append(
-                "🥵 Extreme heat is present. Drink plenty of water "
-                "and avoid unnecessary prolonged outdoor exposure."
-            )
+    if temp is not None and temp >= 38:
 
-        elif temp >= 38:
+        advice.append(
+            "🥵 It is very hot. Carry enough water, "
+            "avoid unnecessary long outdoor exposure, "
+            "and take breaks in a cool place."
+        )
 
-            advice.append(
-                "🥵 It is very hot. Carry enough water and avoid "
-                "staying outdoors for long periods."
-            )
+        advice.append(
+            "🚶 If you are walking or travelling to college, "
+            "try to avoid prolonged direct sunlight."
+        )
 
-        elif temp >= 33:
+    elif temp is not None and temp >= 33:
 
-            advice.append(
-                "☀️ It is hot. Use sunscreen, sunglasses and "
-                "carry water if you are going outside."
-            )
+        advice.append(
+            "☀️ It is hot. Use sunscreen, sunglasses "
+            "and carry enough water when going outside."
+        )
 
-        elif temp >= 29:
+        advice.append(
+            "🚌 If you are travelling or walking for a long time, "
+            "take short breaks and avoid unnecessary sun exposure."
+        )
 
-            advice.append(
-                "🌤️ It is warm. Carry water and consider sun "
-                "protection for longer outdoor activities."
-            )
+    elif temp is not None and temp >= 29:
 
-        elif temp <= 15:
+        advice.append(
+            "🌤️ It is warm. Carry water if you will "
+            "stay outdoors for a long time."
+        )
 
-            advice.append(
-                "🧥 It is relatively cool. Consider carrying "
-                "a light jacket if you are going outside."
-            )
+    elif temp is not None and temp <= 12:
+
+        advice.append(
+            "🧥 It is relatively cold. Consider carrying "
+            "a light jacket or warm clothing."
+        )
+
+    # --------------------------------------------------------
+    # FEELS LIKE
+    # --------------------------------------------------------
+
+    if (
+        feels is not None
+        and temp is not None
+        and feels >= temp + 4
+    ):
+
+        advice.append(
+            "💧 It may feel warmer than the actual temperature. "
+            "Stay hydrated and take breaks outdoors."
+        )
 
     # --------------------------------------------------------
     # UV
@@ -858,47 +931,78 @@ def generate_daily_advice(weather):
     if uv >= 8:
 
         advice.append(
-            "🧴 UV exposure is very strong. Use sunscreen, "
-            "sunglasses and avoid unnecessary direct sunlight."
+            "🧴 UV exposure may be very strong. "
+            "Use sunscreen, sunglasses and preferably "
+            "limit long periods under direct sunlight."
         )
 
     elif uv >= 6:
 
         advice.append(
-            "🧴 UV exposure may be strong. Sunscreen and "
-            "sunglasses are recommended outdoors."
+            "🧴 UV exposure may be strong. "
+            "Sunscreen and sunglasses are useful "
+            "for outdoor activities."
         )
 
-    elif uv >= 3 and period in {
-        "Morning",
-        "Afternoon"
-    }:
+    elif uv >= 3:
 
         advice.append(
-            "🕶️ UV protection can still be useful during "
-            "long outdoor activities."
+            "😎 Some UV exposure is present. "
+            "Consider sun protection if you stay outside for long."
         )
 
     # --------------------------------------------------------
-    # RAIN
+    # CURRENT/NEXT HOURS RAIN
     # --------------------------------------------------------
 
-    if is_rainy(weather):
+    if (
+        code in rainy_codes
+        or rain > 0
+        or showers > 0
+        or rain_info["rain_expected"]
+    ):
+
+        probability = rain_info[
+            "max_probability"
+        ]
+
+        if probability >= 70:
+
+            advice.append(
+                f"☔ There is a high chance of rain "
+                f"in the next few hours ({probability:.0f}% peak probability). "
+                "Carry an umbrella or raincoat."
+            )
+
+        elif probability >= 40:
+
+            advice.append(
+                f"🌦️ Rain is possible in the next few hours "
+                f"({probability:.0f}% peak probability). "
+                "Keep an umbrella or raincoat with you."
+            )
+
+        else:
+
+            advice.append(
+                "☔ Rain is currently possible. "
+                "Carry an umbrella or raincoat."
+            )
 
         advice.append(
-            "☔ Rain is possible or occurring. Carry an umbrella "
-            "or raincoat and be careful on wet roads."
+            "🛣️ Wet roads can become slippery. "
+            "Be careful while walking, cycling, driving or riding a bike."
         )
 
     # --------------------------------------------------------
     # STORM
     # --------------------------------------------------------
 
-    if is_storm(weather):
+    if code in storm_codes:
 
         advice.append(
-            "⛈️ Thunderstorm conditions are possible. Avoid "
-            "unnecessary outdoor exposure and seek shelter "
+            "⛈️ Thunderstorm conditions are possible. "
+            "Avoid unnecessary outdoor exposure and seek shelter "
             "if thunder or lightning occurs."
         )
 
@@ -906,29 +1010,19 @@ def generate_daily_advice(weather):
     # WIND
     # --------------------------------------------------------
 
-    if wind >= 50 or gust >= 65:
+    if wind >= 35 or gust >= 50:
 
         advice.append(
-            "💨 Very strong winds are possible. Avoid unnecessary "
-            "two-wheeler travel and exposed outdoor areas."
+            "💨 Strong winds are possible. "
+            "Be especially careful on two-wheelers, "
+            "while walking near trees, and around loose objects."
         )
 
-    elif wind >= 35 or gust >= 50:
+    elif wind >= 25:
 
         advice.append(
-            "💨 Strong winds are possible. Be careful while "
-            "walking, riding or travelling on a two-wheeler."
-        )
-
-    # --------------------------------------------------------
-    # FOG
-    # --------------------------------------------------------
-
-    if is_foggy(weather):
-
-        advice.append(
-            "🌫️ Fog may reduce visibility. If travelling, "
-            "slow down and use appropriate lights."
+            "💨 Moderate-to-strong wind is present. "
+            "Use extra care if you are riding a two-wheeler."
         )
 
     # --------------------------------------------------------
@@ -938,89 +1032,122 @@ def generate_daily_advice(weather):
     if humidity >= 80:
 
         advice.append(
-            "💧 Humidity is high. Keep water with you and "
-            "expect the weather to feel warmer."
+            "💧 Humidity is high. "
+            "The weather may feel uncomfortable, "
+            "so keep water with you."
         )
 
     # --------------------------------------------------------
-    # NIGHT TRAVEL
+    # COLLEGE / DAILY LIFE
     # --------------------------------------------------------
 
-    if period in {
-        "Night",
-        "Midnight"
-    }:
+    if 6 <= time_info["datetime"].hour < 18:
 
-        if is_rainy(weather):
+        advice.append(
+            "🎒 If you are going to college or work, "
+            "check the rain and heat conditions before leaving "
+            "and carry the appropriate protection."
+        )
+
+    # --------------------------------------------------------
+    # WALKING
+    # --------------------------------------------------------
+
+    if (
+        rain > 0
+        or showers > 0
+        or code in rainy_codes
+    ):
+
+        advice.append(
+            "🚶 If you plan to walk, use an umbrella/raincoat "
+            "and be careful on wet or slippery surfaces."
+        )
+
+    else:
+
+        if temp is not None and temp < 35:
 
             advice.append(
-                "🌙☔ Night + rain can reduce visibility and "
-                "make roads slippery. Take extra care while travelling."
-            )
-
-        elif wind >= 35:
-
-            advice.append(
-                "🌙💨 Strong wind at night can make two-wheeler "
-                "travel more difficult. Travel carefully."
-            )
-
-        else:
-
-            advice.append(
-                "🌙 If you are going out at night, keep your "
-                "phone charged and stay aware of your surroundings."
+                "🚶 Normal walking and short outdoor activities "
+                "look generally manageable under the current conditions."
             )
 
     # --------------------------------------------------------
-    # DEFAULT
+    # TWO-WHEELER
     # --------------------------------------------------------
 
-    if not advice:
+    if (
+        rain > 0
+        or showers > 0
+        or wind >= 30
+        or code in storm_codes
+    ):
+
+        advice.append(
+            "🏍️ If you are using a two-wheeler, "
+            "ride carefully because rain, wind or reduced visibility "
+            "can make travel more difficult."
+        )
+
+    # --------------------------------------------------------
+    # NO MAJOR ISSUES
+    # --------------------------------------------------------
+
+    if len(advice) <= 1:
 
         advice.append(
             "✅ Conditions look generally suitable for normal "
-            "outdoor activities. Still check the latest weather "
-            "before leaving."
+            "outdoor activities."
+        )
+
+        advice.append(
+            "🎒 You can continue normal daily activities, "
+            "while still checking the latest weather before leaving."
         )
 
     # --------------------------------------------------------
     # LEVEL
     # --------------------------------------------------------
 
-    if is_storm(weather) or rain > 5:
+    if (
+        code in storm_codes
+        or rain >= 5
+    ):
 
         level = "danger"
-        title = "⚠️ Be careful before going outside"
+
+        title = (
+            "⚠️ Be careful before going outside"
+        )
 
     elif (
-        is_rainy(weather)
+        code in rainy_codes
+        or rain > 0
+        or showers > 0
+        or rain_info["max_probability"] >= 60
         or wind >= 35
-        or gust >= 50
-        or (temp is not None and temp >= 38)
+        or temp is not None and temp >= 38
     ):
 
         level = "warning"
-        title = "⚠️ Weather precautions"
 
-    elif period in {
-        "Night",
-        "Midnight"
-    }:
-
-        level = "night"
-        title = f"{time_info['icon']} {period} Travel Advice"
+        title = (
+            "🌦️ Weather precautions"
+        )
 
     else:
 
         level = "success"
-        title = "✅ Outdoor Activity Advice"
+
+        title = (
+            "✅ Daily-life weather advice"
+        )
 
     return {
         "level": level,
         "title": title,
-        "items": advice,
-        "time_info": time_info
+        "items": advice
     }
 
 
@@ -1028,7 +1155,6 @@ def generate_daily_advice(weather):
 # ROUTING
 # ============================================================
 
-@st.cache_data(ttl=600, show_spinner=False)
 def get_routes(
     start_lat,
     start_lon,
@@ -1054,8 +1180,7 @@ def get_routes(
 
     data = safe_get(
         url,
-        params,
-        show_error=False
+        params
     )
 
     if not data:
@@ -1111,6 +1236,11 @@ def get_routes(
         key=lambda x: x["distance_km"]
     )
 
+    # Re-number after sorting
+    for index, route in enumerate(routes):
+
+        route["id"] = index + 1
+
     return routes
 
 
@@ -1161,63 +1291,6 @@ def sample_route_points(
 
 
 # ============================================================
-# ROUTE WEATHER ANALYSIS
-# ============================================================
-
-def analyze_route_weather(
-    route,
-    start,
-    destination
-):
-
-    points = sample_route_points(
-        route["geometry"],
-        max_points=8
-    )
-
-    results = []
-
-    for i, point in enumerate(points):
-
-        weather = get_point_weather(
-            point["latitude"],
-            point["longitude"]
-        )
-
-        if not weather:
-            continue
-
-        place_name = (
-            f"Route Point {i + 1}"
-        )
-
-        if i == 0:
-
-            place_name = start.get(
-                "name",
-                "Start"
-            )
-
-        elif i == len(points) - 1:
-
-            place_name = destination.get(
-                "name",
-                "Destination"
-            )
-
-        results.append(
-            {
-                "name": place_name,
-                "latitude": point["latitude"],
-                "longitude": point["longitude"],
-                "weather": weather
-            }
-        )
-
-    return results
-
-
-# ============================================================
 # HAVERSINE
 # ============================================================
 
@@ -1259,10 +1332,73 @@ def haversine(
 
 
 # ============================================================
+# ROUTE WEATHER ANALYSIS
+# ============================================================
+
+def analyze_route_weather(
+    route,
+    start,
+    destination
+):
+
+    points = sample_route_points(
+        route["geometry"],
+        max_points=8
+    )
+
+    results = []
+
+    for i, point in enumerate(
+        points
+    ):
+
+        weather = get_point_weather(
+            point["latitude"],
+            point["longitude"]
+        )
+
+        if not weather:
+            continue
+
+        place_name = (
+            f"Route Point {i + 1}"
+        )
+
+        if i == 0:
+
+            place_name = start.get(
+                "name",
+                "Start"
+            )
+
+        elif i == len(points) - 1:
+
+            place_name = destination.get(
+                "name",
+                "Destination"
+            )
+
+        results.append(
+            {
+                "name": place_name,
+                "latitude": point["latitude"],
+                "longitude": point["longitude"],
+                "weather": weather
+            }
+        )
+
+        time.sleep(0.05)
+
+    return results
+
+
+# ============================================================
 # ROUTE RISK
 # ============================================================
 
-def route_risk_analysis(route_weather):
+def route_risk_analysis(
+    route_weather
+):
 
     if not route_weather:
 
@@ -1270,12 +1406,12 @@ def route_risk_analysis(route_weather):
             "level": "unknown",
             "score": 0,
             "problems": [
-                "Weather information is unavailable "
-                "for this route."
+                "Weather information is unavailable for this route."
             ]
         }
 
     score = 0
+
     problems = []
 
     for point in route_weather:
@@ -1318,8 +1454,7 @@ def route_risk_analysis(route_weather):
             score += 5
 
             problems.append(
-                f"⛈️ Thunderstorm possible near "
-                f"{point['name']}."
+                f"Thunderstorm possible near {point['name']}."
             )
 
         elif (
@@ -1332,8 +1467,7 @@ def route_risk_analysis(route_weather):
             score += 4
 
             problems.append(
-                f"🌧️ Heavy rain possible near "
-                f"{point['name']}."
+                f"Heavy rain possible near {point['name']}."
             )
 
         elif (
@@ -1349,8 +1483,7 @@ def route_risk_analysis(route_weather):
             score += 2
 
             problems.append(
-                f"☔ Rain is possible near "
-                f"{point['name']}."
+                f"Rain is possible near {point['name']}."
             )
 
         if wind >= 35 or gust >= 50:
@@ -1358,31 +1491,21 @@ def route_risk_analysis(route_weather):
             score += 3
 
             problems.append(
-                f"💨 Strong wind is possible near "
-                f"{point['name']}."
+                f"Strong wind is possible near {point['name']}."
             )
 
-        if temp is not None and temp >= 38:
+        if (
+            temp is not None
+            and temp >= 38
+        ):
 
             score += 2
 
             problems.append(
-                f"🥵 Very hot conditions near "
-                f"{point['name']}."
+                f"Very hot conditions near {point['name']}."
             )
 
-        if code in {
-            45, 48
-        }:
-
-            score += 2
-
-            problems.append(
-                f"🌫️ Reduced visibility due to fog "
-                f"near {point['name']}."
-            )
-
-    if score >= 10:
+    if score >= 8:
 
         level = "high"
 
@@ -1420,89 +1543,146 @@ def generate_travel_advice(
     advice = []
 
     start_temp = (
-        start_weather.get("temperature")
+        start_weather.get(
+            "temperature"
+        )
         if start_weather
         else None
     )
 
     destination_temp = (
-        destination_weather.get("temperature")
+        destination_weather.get(
+            "temperature"
+        )
         if destination_weather
         else None
     )
 
-    # Start
+    # Start location
     if start_weather:
 
-        if start_temp is not None and start_temp >= 33:
+        start_rain = (
+            start_weather.get(
+                "rain",
+                0
+            ) or 0
+        )
 
-            advice.append(
-                "☀️ Your starting location is hot. "
-                "Use sunscreen, sunglasses and carry water."
-            )
+        start_code = start_weather.get(
+            "weather_code",
+            0
+        )
 
-        if is_rainy(start_weather):
+        if start_temp is not None:
+
+            if start_temp >= 33:
+
+                advice.append(
+                    "☀️ Your starting location is hot. "
+                    "Use sunscreen, sunglasses and carry water."
+                )
+
+            elif start_temp <= 12:
+
+                advice.append(
+                    "🧥 Your starting location is relatively cold. "
+                    "Consider carrying a jacket."
+                )
+
+        if (
+            start_rain > 0
+            or start_code in {
+                51, 53, 55,
+                61, 63, 65,
+                80, 81, 82,
+                95, 96, 99
+            }
+        ):
 
             advice.append(
                 "☔ Rain is possible at your starting location. "
                 "Carry an umbrella or raincoat."
             )
 
-        if is_storm(start_weather):
-
-            advice.append(
-                "⛈️ A thunderstorm may affect your starting "
-                "location. Check conditions before leaving."
-            )
-
     # Destination
     if destination_weather:
 
-        if destination_temp is not None and destination_temp >= 33:
+        destination_rain = (
+            destination_weather.get(
+                "rain",
+                0
+            ) or 0
+        )
 
-            advice.append(
-                "🌡️ The destination is warm/hot. "
-                "Prepare for heat after reaching there."
-            )
+        destination_code = destination_weather.get(
+            "weather_code",
+            0
+        )
 
-        if is_rainy(destination_weather):
+        if destination_temp is not None:
+
+            if destination_temp >= 33:
+
+                advice.append(
+                    "🌡️ The destination is warm/hot. "
+                    "Prepare for heat after reaching there."
+                )
+
+            elif destination_temp <= 12:
+
+                advice.append(
+                    "🧥 The destination is relatively cold. "
+                    "Consider carrying suitable warm clothing."
+                )
+
+        if (
+            destination_rain > 0
+            or destination_code in {
+                51, 53, 55,
+                61, 63, 65,
+                80, 81, 82,
+                95, 96, 99
+            }
+        ):
 
             advice.append(
                 "☔ Rain is possible at the destination. "
                 "Keep rain protection with you."
             )
 
-    # Route
+    # Route risk
     if route_risk["level"] == "high":
 
         advice.append(
-            "⚠️ Several significant weather risks were detected "
-            "along the selected route. Consider checking conditions "
-            "again before travelling."
+            "⚠️ The selected route contains significant "
+            "weather risks. Check the latest conditions "
+            "before starting the journey."
         )
 
     elif route_risk["level"] == "medium":
 
         advice.append(
             "⚠️ Weather conditions change along this route. "
-            "Travel may be possible, but extra caution is recommended."
+            "Extra caution is recommended."
         )
 
     else:
 
         advice.append(
             "✅ No major weather-related issue was detected "
-            "along the sampled route points."
+            "at the sampled route points."
         )
 
+    # Route problems
     if route_risk["problems"]:
 
         advice.append(
-            "🗺️ Weather can differ at different points of the "
-            "journey, so do not judge the entire trip only from "
-            "the starting and destination weather."
+            "🗺️ Weather can differ at different points "
+            "along the journey. Do not judge the entire route "
+            "only from the starting location."
         )
 
+    # Distance
     if route["distance_km"] <= 50:
 
         advice.append(
@@ -1520,49 +1700,9 @@ def generate_travel_advice(
     else:
 
         advice.append(
-            "🛣️ This is a long journey. Keep checking weather "
-            "conditions during the trip."
-        )
-
-    # Route-specific practical advice
-    route_rain = any(
-        is_rainy(point["weather"])
-        for point in route_weather
-    )
-
-    route_wind = any(
-        (
-            (point["weather"].get("wind_speed", 0) or 0) >= 35
-            or
-            (point["weather"].get("wind_gusts", 0) or 0) >= 50
-        )
-        for point in route_weather
-    )
-
-    route_fog = any(
-        is_foggy(point["weather"])
-        for point in route_weather
-    )
-
-    if route_rain:
-
-        advice.append(
-            "🏍️ If you are travelling by bike, be extra careful "
-            "on wet roads and reduce speed when necessary."
-        )
-
-    if route_wind:
-
-        advice.append(
-            "💨 Strong winds may affect two-wheelers, especially "
-            "on open roads and bridges."
-        )
-
-    if route_fog:
-
-        advice.append(
-            "🌫️ Fog may reduce visibility at some route points. "
-            "Use lights and maintain a safe travelling speed."
+            "🛣️ This is a long journey. "
+            "Weather can change significantly during travel, "
+            "so keep checking conditions."
         )
 
     return advice
@@ -1603,6 +1743,7 @@ def create_start_location_map(
         control_scale=True
     )
 
+    # Current selected marker
     if current_location:
 
         popup_text = (
@@ -1666,6 +1807,7 @@ def create_route_map(
         control_scale=True
     )
 
+    # Start marker
     folium.Marker(
         [
             start["latitude"],
@@ -1679,6 +1821,7 @@ def create_route_map(
         )
     ).add_to(m)
 
+    # Destination marker
     folium.Marker(
         [
             destination["latitude"],
@@ -1692,6 +1835,7 @@ def create_route_map(
         )
     ).add_to(m)
 
+    # Routes
     for route in routes:
 
         route_id = route["id"]
@@ -1722,6 +1866,7 @@ def create_route_map(
             )
         ).add_to(m)
 
+    # Weather points
     if route_weather:
 
         for point in route_weather:
@@ -1757,25 +1902,54 @@ def create_route_map(
 
 
 # ============================================================
-# DISPLAY TIME
+# DISPLAY TIME CARD
 # ============================================================
 
-def display_time_info(weather):
+def display_time_card(
+    weather,
+    location_name
+):
 
     if not weather:
         return
 
-    time_info = get_time_information(
-        weather
+    timezone_name = weather.get(
+        "timezone",
+        "UTC"
     )
+
+    time_info = get_time_period(
+        timezone_name
+    )
+
+    local_time = time_info[
+        "datetime"
+    ]
 
     st.markdown(
         f"""
-        <div class="time-badge">
-            {time_info['icon']}
+        <div class="time-card">
+
+        <div class="time-period">
             {time_info['period']}
-            &nbsp; • &nbsp;
-            Local time: {time_info['time']}
+        </div>
+
+        <div class="big-time">
+            {local_time.strftime("%I:%M:%S %p")}
+        </div>
+
+        <p>
+            📅 {local_time.strftime("%A, %d %B %Y")}
+        </p>
+
+        <p>
+            📍 {location_name}
+        </p>
+
+        <p>
+            🌍 Timezone: {timezone_name}
+        </p>
+
         </div>
         """,
         unsafe_allow_html=True
@@ -1783,7 +1957,7 @@ def display_time_info(weather):
 
 
 # ============================================================
-# DISPLAY WEATHER CARD
+# DISPLAY WEATHER
 # ============================================================
 
 def display_weather_card(
@@ -1830,10 +2004,6 @@ def display_weather_card(
         unsafe_allow_html=True
     )
 
-    display_time_info(
-        weather
-    )
-
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
@@ -1864,46 +2034,35 @@ def display_weather_card(
             str(weather["uv_index"])
         )
 
+    c5, c6, c7, c8 = st.columns(4)
 
-# ============================================================
-# DISPLAY ADVICE
-# ============================================================
+    with c5:
 
-def display_advice(advice):
+        st.metric(
+            "Rain",
+            f"{weather['rain']} mm"
+        )
 
-    if advice["level"] == "danger":
+    with c6:
 
-        css_class = "danger-card"
+        st.metric(
+            "Showers",
+            f"{weather['showers']} mm"
+        )
 
-    elif advice["level"] == "warning":
+    with c7:
 
-        css_class = "warning-card"
+        st.metric(
+            "Cloud Cover",
+            f"{weather['cloud_cover']} %"
+        )
 
-    elif advice["level"] == "night":
+    with c8:
 
-        css_class = "night-card"
-
-    else:
-
-        css_class = "success-card"
-
-    st.markdown(
-        f'<div class="{css_class}">',
-        unsafe_allow_html=True
-    )
-
-    st.subheader(
-        advice["title"]
-    )
-
-    for item in advice["items"]:
-
-        st.write(item)
-
-    st.markdown(
-        "</div>",
-        unsafe_allow_html=True
-    )
+        st.metric(
+            "Wind Gusts",
+            f"{weather['wind_gusts']} km/h"
+        )
 
 
 # ============================================================
@@ -1919,8 +2078,9 @@ st.markdown(
 
 st.markdown(
     '<div class="sub-title">'
-    'Check weather, choose locations on the map, '
-    'plan routes and get practical travel advice.'
+    'Check weather, understand the current time period, '
+    'choose locations on the map, plan routes and receive '
+    'practical daily-life travel advice.'
     '</div>',
     unsafe_allow_html=True
 )
@@ -1935,8 +2095,8 @@ st.header(
 )
 
 st.write(
-    "Use your device location or click anywhere "
-    "on the map to choose your start point."
+    "Use your device location or click anywhere on the map "
+    "to choose your starting point."
 )
 
 
@@ -1981,7 +2141,7 @@ if get_location_button:
 
                 st.error(
                     "Location permission was denied. "
-                    "Please allow location access in your browser "
+                    "Allow location access in your browser "
                     "and click the button again."
                 )
 
@@ -1994,19 +2154,15 @@ if get_location_button:
 
         else:
 
-            with st.spinner(
-                "Getting location weather..."
-            ):
+            current_location = create_start_location(
+                location["latitude"],
+                location["longitude"]
+            )
 
-                current_location = create_start_location(
-                    location["latitude"],
-                    location["longitude"]
-                )
-
-                current_weather = get_point_weather(
-                    current_location["latitude"],
-                    current_location["longitude"]
-                )
+            current_weather = get_point_weather(
+                current_location["latitude"],
+                current_location["longitude"]
+            )
 
             st.session_state.current_location = (
                 current_location
@@ -2016,21 +2172,19 @@ if get_location_button:
                 current_weather
             )
 
-            st.session_state.destination = None
-            st.session_state.destination_results = []
-            st.session_state.destination_weather = None
             st.session_state.routes = []
             st.session_state.selected_route = None
             st.session_state.route_weather = []
             st.session_state.last_route_key = None
+            st.session_state.destination_weather = None
 
             st.rerun()
 
     else:
 
         st.info(
-            "The browser could not return your location. "
-            "Allow location access and try again."
+            "The browser is waiting for location permission. "
+            "Allow location access and click the button again."
         )
 
 
@@ -2043,8 +2197,8 @@ st.subheader(
 )
 
 st.caption(
-    "👉 Click anywhere on the map to select that "
-    "location as your start point."
+    "👉 Click anywhere on the map to select that location "
+    "as your start point."
 )
 
 start_map = create_start_location_map(
@@ -2123,20 +2277,17 @@ if map_result:
                     selected_weather
                 )
 
-                # Clear old journey information
-                st.session_state.destination = None
-                st.session_state.destination_results = []
-                st.session_state.destination_weather = None
                 st.session_state.routes = []
                 st.session_state.selected_route = None
                 st.session_state.route_weather = []
                 st.session_state.last_route_key = None
+                st.session_state.destination_weather = None
 
                 st.rerun()
 
 
 # ============================================================
-# CURRENT LOCATION DATA
+# CURRENT LOCATION VARIABLES
 # ============================================================
 
 current_location = (
@@ -2160,8 +2311,10 @@ if current_location:
     )
 
     st.caption(
-        f"Latitude: {current_location['latitude']:.6f} | "
-        f"Longitude: {current_location['longitude']:.6f}"
+        f"Latitude: "
+        f"{current_location['latitude']:.6f} | "
+        f"Longitude: "
+        f"{current_location['longitude']:.6f}"
     )
 
 
@@ -2181,6 +2334,11 @@ if (
         "Current Location"
     )
 
+    display_time_card(
+        current_weather,
+        location_name
+    )
+
     display_weather_card(
         "🌍 Current Weather",
         current_weather,
@@ -2188,11 +2346,45 @@ if (
     )
 
     current_advice = generate_daily_advice(
-        current_weather
+        current_weather,
+        current_weather.get(
+            "timezone",
+            "UTC"
+        )
     )
 
-    display_advice(
-        current_advice
+    if current_advice["level"] == "danger":
+
+        st.markdown(
+            '<div class="danger-card">',
+            unsafe_allow_html=True
+        )
+
+    elif current_advice["level"] == "warning":
+
+        st.markdown(
+            '<div class="warning-card">',
+            unsafe_allow_html=True
+        )
+
+    else:
+
+        st.markdown(
+            '<div class="success-card">',
+            unsafe_allow_html=True
+        )
+
+    st.subheader(
+        current_advice["title"]
+    )
+
+    for item in current_advice["items"]:
+
+        st.write(item)
+
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True
     )
 
 else:
@@ -2215,7 +2407,7 @@ st.header(
 
 destination_input = st.text_input(
     "Enter your destination",
-    placeholder="Example: Chennai, Mumbai, Goa, London, Tokyo..."
+    placeholder="Example: Chennai, Mumbai, Goa, London, Tokyo"
 )
 
 search_destination = st.button(
@@ -2229,9 +2421,7 @@ search_destination = st.button(
 
 if search_destination:
 
-    query = destination_input.strip()
-
-    if not query:
+    if not destination_input.strip():
 
         st.warning(
             "Please enter a destination."
@@ -2240,11 +2430,11 @@ if search_destination:
     else:
 
         with st.spinner(
-            "Searching destination..."
+            "Searching worldwide destinations..."
         ):
 
             results = geocode_place(
-                query
+                destination_input.strip()
             )
 
         if not results:
@@ -2258,10 +2448,6 @@ if search_destination:
 
             st.session_state.destination_results = (
                 results
-            )
-
-            st.session_state.last_destination_query = (
-                query
             )
 
 
@@ -2280,23 +2466,28 @@ if destination_results:
 
     for item in destination_results:
 
-        state_text = (
-            f", {item['state']}"
-            if item["state"]
-            else ""
+        state_text = item.get(
+            "state",
+            ""
         )
 
-        country_text = (
-            f", {item['country']}"
-            if item["country"]
-            else ""
+        country_text = item.get(
+            "country",
+            ""
         )
 
-        label = (
-            f"{item['name']}"
-            f"{state_text}"
-            f"{country_text}"
-        )
+        parts = [
+            item["name"],
+            state_text,
+            country_text
+        ]
+
+        parts = [
+            x for x in parts
+            if x
+        ]
+
+        label = ", ".join(parts)
 
         options.append(
             label
@@ -2326,37 +2517,33 @@ if destination_results:
             selected_destination
         )
 
-        st.session_state.destination_weather = (
-            get_point_weather(
-                selected_destination["latitude"],
-                selected_destination["longitude"]
-            )
-        )
-
         st.session_state.routes = []
         st.session_state.selected_route = None
         st.session_state.route_weather = []
         st.session_state.last_route_key = None
 
+        st.session_state.destination_weather = (
+            get_point_weather(
+                selected_destination[
+                    "latitude"
+                ],
+                selected_destination[
+                    "longitude"
+                ]
+            )
+        )
+
         st.rerun()
 
 
 # ============================================================
-# DESTINATION DATA
+# DESTINATION WEATHER
 # ============================================================
 
 destination = (
     st.session_state.destination
 )
 
-destination_weather = (
-    st.session_state.destination_weather
-)
-
-
-# ============================================================
-# DESTINATION WEATHER
-# ============================================================
 
 if (
     destination
@@ -2365,11 +2552,36 @@ if (
 
     st.divider()
 
-    st.subheader(
-        f"🎯 Destination: {destination['name']}"
+    destination_display_name = ", ".join(
+        [
+            x
+            for x in [
+                destination.get(
+                    "name",
+                    ""
+                ),
+                destination.get(
+                    "state",
+                    ""
+                ),
+                destination.get(
+                    "country",
+                    ""
+                )
+            ]
+            if x
+        ]
     )
 
-    if destination_weather is None:
+    st.subheader(
+        f"🎯 Destination: {destination_display_name}"
+    )
+
+    destination_weather = (
+        st.session_state.destination_weather
+    )
+
+    if not destination_weather:
 
         destination_weather = get_point_weather(
             destination["latitude"],
@@ -2380,27 +2592,58 @@ if (
             destination_weather
         )
 
+    display_time_card(
+        destination_weather,
+        destination_display_name
+    )
+
     display_weather_card(
         "🎯 Destination Weather",
         destination_weather,
-        (
-            f"{destination['name']}, "
-            f"{destination.get('state', '')}, "
-            f"{destination.get('country', '')}"
-        )
+        destination_display_name
     )
 
     destination_advice = generate_daily_advice(
-        destination_weather
+        destination_weather,
+        destination_weather.get(
+            "timezone",
+            "UTC"
+        )
     )
 
-    display_advice(
-        {
-            **destination_advice,
-            "title": "🧠 Destination Advice"
-        }
+    if destination_advice["level"] == "danger":
+
+        st.markdown(
+            '<div class="danger-card">',
+            unsafe_allow_html=True
+        )
+
+    elif destination_advice["level"] == "warning":
+
+        st.markdown(
+            '<div class="warning-card">',
+            unsafe_allow_html=True
+        )
+
+    else:
+
+        st.markdown(
+            '<div class="success-card">',
+            unsafe_allow_html=True
+        )
+
+    st.subheader(
+        "🧠 Destination Advice"
     )
 
+    for item in destination_advice["items"]:
+
+        st.write(item)
+
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True
+    )
 
     # ========================================================
     # ROUTES
@@ -2479,9 +2722,8 @@ if routes:
     )
 
     st.caption(
-        "Routes are shown with the shorter-distance "
-        "route first. Alternative routes depend on "
-        "the routing service."
+        "Alternative routes depend on the routing service. "
+        "The shorter-distance route is displayed first."
     )
 
     route_labels = []
@@ -2546,8 +2788,7 @@ if routes:
 
     route_key = (
         f"{selected_route['id']}_"
-        f"{selected_route['distance_km']:.2f}_"
-        f"{selected_route['duration_min']:.0f}"
+        f"{selected_route['distance_km']:.2f}"
     )
 
     if analyze_button:
@@ -2603,7 +2844,6 @@ if (
         route_weather
     )
 
-
     # ========================================================
     # RISK SUMMARY
     # ========================================================
@@ -2641,18 +2881,16 @@ if (
             "✅ No major weather risk detected"
         )
 
-
     st.write(
         f"Risk score: **{risk['score']}**"
     )
-
 
     if risk["problems"]:
 
         for problem in risk["problems"]:
 
             st.write(
-                problem
+                f"• {problem}"
             )
 
     else:
@@ -2667,7 +2905,6 @@ if (
         unsafe_allow_html=True
     )
 
-
     # ========================================================
     # ROUTE POINT WEATHER
     # ========================================================
@@ -2680,22 +2917,12 @@ if (
 
         weather = point["weather"]
 
-        time_info = get_time_information(
-            weather
-        )
-
         with st.expander(
             f"{weather['icon']} "
             f"{point['name']} — "
             f"{weather['temperature']} °C — "
             f"{weather['description']}"
         ):
-
-            st.write(
-                f"{time_info['icon']} "
-                f"{time_info['period']} • "
-                f"Local time: {time_info['time']}"
-            )
 
             c1, c2, c3, c4 = st.columns(4)
 
@@ -2727,6 +2954,23 @@ if (
                     f"{weather['humidity']} %"
                 )
 
+            point_advice = generate_daily_advice(
+                weather,
+                weather.get(
+                    "timezone",
+                    "UTC"
+                )
+            )
+
+            st.write(
+                "**Practical advice:**"
+            )
+
+            for item in point_advice["items"][:5]:
+
+                st.write(
+                    f"• {item}"
+                )
 
     # ========================================================
     # TRAVEL ADVICE
@@ -2738,8 +2982,16 @@ if (
         "🤖 Smart Travel Advice"
     )
 
+    start_weather = (
+        current_weather
+    )
+
+    destination_weather = (
+        st.session_state.destination_weather
+    )
+
     travel_advice = generate_travel_advice(
-        current_weather,
+        start_weather,
         destination_weather,
         route_weather,
         selected_route,
@@ -2756,7 +3008,6 @@ if (
             """,
             unsafe_allow_html=True
         )
-
 
     # ========================================================
     # ROUTE MAP
@@ -2808,7 +3059,7 @@ st.divider()
 
 st.caption(
     "🌦️ Weather Travel Agent | "
-    "Current weather • Smart daily advice • "
-    "Interactive map • Destination weather • "
-    "Route weather analysis • Travel assistance"
+    "Weather • Time Period • Daily-Life Advice • "
+    "Interactive Map • Destination • Routes • "
+    "Route Weather Analysis"
 )
