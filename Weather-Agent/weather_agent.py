@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 import math
 import time
+from datetime import datetime
+import pandas as pd
 from streamlit_js_eval import get_geolocation
 import folium
 from streamlit_folium import st_folium
@@ -12,7 +14,7 @@ from streamlit_folium import st_folium
 # ============================================================
 
 st.set_page_config(
-    page_title="Weather Travel Agent",
+    page_title="Personal Weather Agent",
     page_icon="🌦️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -25,8 +27,9 @@ st.set_page_config(
 
 OPEN_METEO_WEATHER = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_GEOCODING = "https://geocoding-api.open-meteo.com/v1/search"
-OSRM_ROUTE = "https://router.project-osrm.org/route/v1/driving"
+OSRM_ROUTE = "https://router.project-osrm.org/route/v1"
 
+NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse"
 
 REQUEST_TIMEOUT = 20
@@ -43,13 +46,13 @@ st.markdown(
     .main-title {
         font-size: 42px;
         font-weight: 800;
-        margin-bottom: 5px;
+        margin-bottom: 4px;
     }
 
     .sub-title {
-        font-size: 18px;
+        font-size: 17px;
         color: #666;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
     }
 
     .weather-card {
@@ -57,6 +60,14 @@ st.markdown(
         border-radius: 18px;
         background: linear-gradient(135deg, #eef7ff, #ffffff);
         border: 1px solid #dbeafe;
+        margin-bottom: 15px;
+    }
+
+    .agent-card {
+        padding: 20px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #f8f5ff, #ffffff);
+        border: 1px solid #ddd6fe;
         margin-bottom: 15px;
     }
 
@@ -81,6 +92,7 @@ st.markdown(
         border-radius: 16px;
         background: #fff1f2;
         border: 1px solid #fecdd3;
+        margin-bottom: 15px;
     }
 
     .success-card {
@@ -88,6 +100,7 @@ st.markdown(
         border-radius: 16px;
         background: #f0fdf4;
         border: 1px solid #bbf7d0;
+        margin-bottom: 15px;
     }
 
     .warning-card {
@@ -95,6 +108,29 @@ st.markdown(
         border-radius: 16px;
         background: #fffbeb;
         border: 1px solid #fde68a;
+        margin-bottom: 15px;
+    }
+
+    .notification-card {
+        padding: 16px;
+        border-radius: 14px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        margin-bottom: 10px;
+    }
+
+    .chat-agent {
+        padding: 15px;
+        border-radius: 15px;
+        background: #f3f4f6;
+        margin-bottom: 10px;
+    }
+
+    .chat-user {
+        padding: 15px;
+        border-radius: 15px;
+        background: #e0f2fe;
+        margin-bottom: 10px;
     }
 
     .metric-box {
@@ -103,6 +139,14 @@ st.markdown(
         background: #f8fafc;
         text-align: center;
         border: 1px solid #e2e8f0;
+    }
+
+    .small-place {
+        padding: 10px;
+        border-radius: 10px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 8px;
     }
 
     </style>
@@ -118,17 +162,47 @@ st.markdown(
 defaults = {
     "current_location": None,
     "current_weather": None,
+    "search_location_results": [],
     "destination": None,
     "destination_results": [],
     "routes": [],
     "selected_route": None,
     "route_weather": [],
-    "last_route_key": None,
-    "location_requested": False,
     "map_last_clicked": None,
+
+    "activity": "🎓 College",
+    "custom_activity": "",
+
+    "agent_messages": [],
+    "agent_started": False,
+    "agent_finished": False,
+
+    "history": [],
+
+    "preferences": [
+        "🎓 College",
+        "🚶 Walking",
+        "🛍️ Shopping",
+        "🏠 Small Work",
+        "🏍️ Bike",
+        "🚗 Car",
+        "🚌 Bus",
+        "🎬 Movie",
+        "🍴 Restaurant",
+        "🌳 Outdoor",
+        "🧳 Traveling"
+    ],
+
+    "notifications": [],
+
+    "travel_mode": "driving",
+
+    "location_requested": False,
+    "auto_location_attempted": False
 }
 
 for key, value in defaults.items():
+
     if key not in st.session_state:
         st.session_state[key] = value
 
@@ -197,25 +271,41 @@ def safe_get(url, params=None, headers=None):
 
         return response.json()
 
-    except requests.RequestException as e:
-
-        st.error(
-            f"Network/API error: {e}"
-        )
-
+    except requests.RequestException:
         return None
 
-    except Exception as e:
-
-        st.error(
-            f"Unexpected error: {e}"
-        )
-
+    except Exception:
         return None
 
 
 # ============================================================
-# GET BROWSER LOCATION
+# CURRENT TIME
+# ============================================================
+
+def get_local_time():
+
+    return datetime.now()
+
+
+def get_day_period():
+
+    hour = get_local_time().hour
+
+    if 5 <= hour < 12:
+        return "Morning", "🌅"
+
+    elif 12 <= hour < 17:
+        return "Afternoon", "☀️"
+
+    elif 17 <= hour < 20:
+        return "Evening", "🌇"
+
+    else:
+        return "Night", "🌙"
+
+
+# ============================================================
+# BROWSER LOCATION
 # ============================================================
 
 def get_browser_location():
@@ -277,7 +367,7 @@ def reverse_geocode(
     }
 
     headers = {
-        "User-Agent": "WeatherTravelAgent/1.0"
+        "User-Agent": "PersonalWeatherAgent/1.0"
     }
 
     try:
@@ -338,10 +428,10 @@ def reverse_geocode(
 
 
 # ============================================================
-# CREATE START LOCATION
+# CREATE LOCATION
 # ============================================================
 
-def create_start_location(
+def create_location(
     latitude,
     longitude
 ):
@@ -361,14 +451,14 @@ def create_start_location(
 
 
 # ============================================================
-# SEARCH DESTINATION
+# GEOCODE SEARCH
 # ============================================================
 
 def geocode_place(place):
 
     params = {
         "name": place,
-        "count": 5,
+        "count": 8,
         "language": "en",
         "format": "json"
     }
@@ -419,7 +509,7 @@ def geocode_place(place):
 
 
 # ============================================================
-# GET WEATHER
+# WEATHER
 # ============================================================
 
 def get_weather(
@@ -468,7 +558,7 @@ def get_weather(
 
 
 # ============================================================
-# GET POINT WEATHER
+# POINT WEATHER
 # ============================================================
 
 def get_point_weather(
@@ -502,53 +592,39 @@ def get_point_weather(
         "temperature": current.get(
             "temperature_2m"
         ),
-
         "feels_like": current.get(
             "apparent_temperature"
         ),
-
         "humidity": current.get(
             "relative_humidity_2m"
         ),
-
         "precipitation": current.get(
             "precipitation"
         ),
-
         "rain": current.get(
             "rain"
         ),
-
         "showers": current.get(
             "showers"
         ),
-
         "weather_code": code,
-
         "description": description,
-
         "icon": icon,
-
         "cloud_cover": current.get(
             "cloud_cover"
         ),
-
         "wind_speed": current.get(
             "wind_speed_10m"
         ),
-
         "wind_direction": current.get(
             "wind_direction_10m"
         ),
-
         "wind_gusts": current.get(
             "wind_gusts_10m"
         ),
-
         "uv_index": current.get(
             "uv_index"
         ),
-
         "hourly": data.get(
             "hourly",
             {}
@@ -557,24 +633,56 @@ def get_point_weather(
 
 
 # ============================================================
-# SMART DAILY-LIFE ADVICE
+# WEATHER FLAGS
 # ============================================================
 
-def generate_daily_advice(weather):
+def is_rainy(weather):
+
+    if not weather:
+        return False
+
+    rainy_codes = {
+        51, 53, 55,
+        56, 57,
+        61, 63, 65,
+        66, 67,
+        80, 81, 82,
+        95, 96, 99
+    }
+
+    return (
+        weather.get("weather_code", 0) in rainy_codes
+        or (weather.get("rain", 0) or 0) > 0
+        or (weather.get("showers", 0) or 0) > 0
+    )
+
+
+def is_storm(weather):
+
+    if not weather:
+        return False
+
+    return weather.get(
+        "weather_code",
+        0
+    ) in {95, 96, 99}
+
+
+# ============================================================
+# ACTIVITY-SPECIFIC ADVICE
+# ============================================================
+
+def generate_activity_advice(
+    weather,
+    activity,
+    period
+):
 
     if not weather:
 
-        return {
-            "level": "warning",
-
-            "title":
-                "Weather information unavailable",
-
-            "items": [
-                "Weather data could not be retrieved.",
-                "Check your internet connection and try again."
-            ]
-        }
+        return [
+            "Weather information is currently unavailable."
+        ]
 
     temp = weather.get(
         "temperature"
@@ -582,11 +690,6 @@ def generate_daily_advice(weather):
 
     rain = weather.get(
         "rain",
-        0
-    ) or 0
-
-    showers = weather.get(
-        "showers",
         0
     ) or 0
 
@@ -605,145 +708,307 @@ def generate_daily_advice(weather):
         0
     ) or 0
 
-    code = weather.get(
-        "weather_code",
-        0
-    )
-
     advice = []
 
-    rainy_codes = {
-        51, 53, 55,
-        56, 57,
-        61, 63, 65,
-        66, 67,
-        80, 81, 82,
-        95, 96, 99
-    }
-
-    storm_codes = {
-        95, 96, 99
-    }
+    # --------------------------------------------------------
+    # GENERAL WEATHER
+    # --------------------------------------------------------
 
     if temp is not None and temp >= 38:
 
         advice.append(
-            "🥵 It is very hot. Carry enough water "
+            "🥵 It is very hot outside. Carry enough water "
             "and avoid unnecessary long outdoor exposure."
         )
 
     elif temp is not None and temp >= 33:
 
         advice.append(
-            "☀️ It is hot. Use sunscreen, sunglasses "
-            "and carry water if you are going outside."
-        )
-
-    elif temp is not None and temp >= 29:
-
-        advice.append(
-            "🌤️ It is warm. Carry water and use sun "
-            "protection if you will stay outdoors for long."
+            "☀️ It is hot outside. Carry water and consider "
+            "sunscreen and sunglasses."
         )
 
     if uv >= 6:
 
         advice.append(
-            "🧴 UV exposure may be strong. Sunscreen "
-            "and sunglasses are recommended for outdoor activities."
+            "🧴 UV exposure may be strong. Sunscreen and "
+            "sunglasses can be useful for outdoor activities."
         )
 
-    if (
-        code in rainy_codes
-        or rain > 0
-        or showers > 0
-    ):
+    if is_rainy(weather):
 
         advice.append(
             "☔ Rain is possible/current. Carry an umbrella "
             "or raincoat and be careful on wet roads."
         )
 
-    if code in storm_codes:
+    if is_storm(weather):
 
         advice.append(
             "⛈️ Thunderstorm conditions are possible. "
-            "Avoid unnecessary outdoor exposure and seek shelter "
-            "if thunder/lightning occurs."
+            "If thunder or lightning occurs, move indoors "
+            "or to a safe sheltered place."
         )
 
     if wind >= 35 or gust >= 50:
 
         advice.append(
-            "💨 Strong winds are possible. Be careful while "
-            "walking, riding, or travelling on two-wheelers."
+            "💨 Strong winds are possible. Take extra care "
+            "while walking or riding a two-wheeler."
         )
 
-    if (
-        weather.get("humidity") is not None
-        and weather["humidity"] >= 80
-    ):
+    # --------------------------------------------------------
+    # ACTIVITY
+    # --------------------------------------------------------
+
+    if "Walking" in activity:
+
+        if is_rainy(weather):
+
+            advice.append(
+                "🚶 Since you are walking, an umbrella and "
+                "comfortable footwear may be useful."
+            )
+
+        elif temp is not None and temp >= 33:
+
+            advice.append(
+                "🚶 Since you are walking in hot weather, "
+                "carry water and consider walking in a shaded area."
+            )
+
+        else:
+
+            advice.append(
+                "🚶 Conditions look reasonably suitable for walking. "
+                "Keep checking the weather if you stay outside for long."
+            )
+
+    elif "College" in activity:
 
         advice.append(
-            "💧 Humidity is high. Keep water with you "
-            "and expect the weather to feel warmer."
+            "🎓 For college, keep your usual essentials ready "
+            "and check the weather again before leaving."
         )
+
+        if is_rainy(weather):
+
+            advice.append(
+                "🎒 Since rain is possible, keeping an umbrella "
+                "or raincoat in your college bag would be useful."
+            )
+
+    elif "Shopping" in activity:
+
+        advice.append(
+            "🛍️ For shopping, check the weather before leaving "
+            "and plan your return time if rain is expected."
+        )
+
+    elif "Small Work" in activity:
+
+        advice.append(
+            "🏠 For a short outdoor task, check the latest weather "
+            "before leaving so you don't get caught by changing conditions."
+        )
+
+    elif "Bike" in activity:
+
+        advice.append(
+            "🏍️ Since you are riding a bike, be especially careful "
+            "if roads are wet or winds are strong."
+        )
+
+        if is_rainy(weather):
+
+            advice.append(
+                "🌧️ Rain can reduce road grip and visibility. "
+                "Ride carefully and avoid unnecessary speeding."
+            )
+
+    elif "Car" in activity:
+
+        advice.append(
+            "🚗 If you're driving, keep an eye on rain, visibility "
+            "and road conditions."
+        )
+
+    elif "Bus" in activity:
+
+        advice.append(
+            "🚌 Check the weather before leaving for your bus stop "
+            "and keep rain protection with you if needed."
+        )
+
+    elif "Movie" in activity:
+
+        advice.append(
+            "🎬 For a movie outing, check the weather for both "
+            "your departure and return time."
+        )
+
+    elif "Restaurant" in activity:
+
+        advice.append(
+            "🍴 For a food outing, check the weather around the "
+            "time you expect to return."
+        )
+
+    elif "Outdoor" in activity:
+
+        advice.append(
+            "🌳 Outdoor activities depend strongly on weather changes, "
+            "so keep checking rain and heat conditions."
+        )
+
+    elif "Traveling" in activity:
+
+        advice.append(
+            "🧳 For traveling, check weather at your destination "
+            "and important places along the route."
+        )
+
+    # --------------------------------------------------------
+    # DAY/NIGHT
+    # --------------------------------------------------------
+
+    if period == "Night":
+
+        advice.append(
+            "🌙 It is nighttime. Visibility can be lower, so "
+            "take extra care while travelling or walking."
+        )
+
+    elif period == "Afternoon" and temp is not None and temp >= 33:
+
+        advice.append(
+            "☀️ Since it is afternoon and temperatures are high, "
+            "try to reduce unnecessary exposure to direct sunlight."
+        )
+
+    # --------------------------------------------------------
+    # DEFAULT
+    # --------------------------------------------------------
 
     if not advice:
 
         advice.append(
-            "✅ Conditions look generally suitable for normal "
-            "outdoor activities. Still check the latest weather "
-            "before leaving."
+            "✅ Conditions look generally suitable for your activity. "
+            "Still check the latest weather before leaving."
         )
 
-    if (
-        code in storm_codes
-        or rain > 5
-    ):
+    return advice
 
-        level = "danger"
 
-        title = (
-            "⚠️ Be careful before going outside"
+# ============================================================
+# NOTIFICATIONS
+# ============================================================
+
+def generate_notifications(
+    weather,
+    activity,
+    location_name,
+    period
+):
+
+    notifications = []
+
+    if not weather:
+        return notifications
+
+    temp = weather.get(
+        "temperature"
+    )
+
+    uv = weather.get(
+        "uv_index",
+        0
+    ) or 0
+
+    wind = weather.get(
+        "wind_speed",
+        0
+    ) or 0
+
+    if is_storm(weather):
+
+        notifications.append(
+            {
+                "type": "danger",
+                "title": "⛈️ Thunderstorm Alert",
+                "message": (
+                    f"Thunderstorm conditions are possible near "
+                    f"{location_name}."
+                )
+            }
         )
 
-    elif (
-        code in rainy_codes
-        or rain > 0
-        or showers > 0
-    ):
+    elif is_rainy(weather):
 
-        level = "warning"
-
-        title = (
-            "🌧️ Rain-related precautions"
+        notifications.append(
+            {
+                "type": "warning",
+                "title": "🌧️ Rain Alert",
+                "message": (
+                    f"Rain is possible near {location_name}. "
+                    f"Consider carrying an umbrella."
+                )
+            }
         )
 
-    elif (
-        temp is not None
-        and temp >= 33
-    ):
+    if temp is not None and temp >= 38:
 
-        level = "warning"
-
-        title = (
-            "☀️ Hot-weather precautions"
+        notifications.append(
+            {
+                "type": "warning",
+                "title": "🥵 Heat Alert",
+                "message": (
+                    f"Temperature is around {temp}°C near "
+                    f"{location_name}. Keep water with you."
+                )
+            }
         )
 
-    else:
+    if uv >= 7:
 
-        level = "success"
-
-        title = (
-            "✅ Outdoor activity advice"
+        notifications.append(
+            {
+                "type": "warning",
+                "title": "☀️ UV Alert",
+                "message": (
+                    "UV exposure may be strong. Consider sunscreen "
+                    "and sunglasses for outdoor activities."
+                )
+            }
         )
 
-    return {
-        "level": level,
-        "title": title,
-        "items": advice
-    }
+    if wind >= 40:
+
+        notifications.append(
+            {
+                "type": "warning",
+                "title": "💨 Wind Alert",
+                "message": (
+                    "Strong winds are possible. Take extra care "
+                    "if riding a bike or travelling outdoors."
+                )
+            }
+        )
+
+    if period == "Night":
+
+        notifications.append(
+            {
+                "type": "info",
+                "title": "🌙 Night Reminder",
+                "message": (
+                    f"It's nighttime and you selected {activity}. "
+                    "Visibility may be lower."
+                )
+            }
+        )
+
+    return notifications
 
 
 # ============================================================
@@ -754,8 +1019,11 @@ def get_routes(
     start_lat,
     start_lon,
     end_lat,
-    end_lon
+    end_lon,
+    mode="driving"
 ):
+
+    profile = mode
 
     coordinates = (
         f"{start_lon},{start_lat};"
@@ -763,7 +1031,7 @@ def get_routes(
     )
 
     url = (
-        f"{OSRM_ROUTE}/{coordinates}"
+        f"{OSRM_ROUTE}/{profile}/{coordinates}"
     )
 
     params = {
@@ -922,7 +1190,27 @@ def haversine(
 
 
 # ============================================================
-# ROUTE WEATHER ANALYSIS
+# ROUTE PLACE NAME
+# ============================================================
+
+def get_route_place_name(
+    latitude,
+    longitude
+):
+
+    place = reverse_geocode(
+        latitude,
+        longitude
+    )
+
+    return place.get(
+        "name",
+        "Route Point"
+    )
+
+
+# ============================================================
+# ROUTE WEATHER
 # ============================================================
 
 def analyze_route_weather(
@@ -950,10 +1238,6 @@ def analyze_route_weather(
         if not weather:
             continue
 
-        place_name = (
-            f"Route Point {i + 1}"
-        )
-
         if i == 0:
 
             place_name = start.get(
@@ -968,6 +1252,13 @@ def analyze_route_weather(
                 "Destination"
             )
 
+        else:
+
+            place_name = get_route_place_name(
+                point["latitude"],
+                point["longitude"]
+            )
+
         results.append(
             {
                 "name": place_name,
@@ -977,7 +1268,7 @@ def analyze_route_weather(
             }
         )
 
-        time.sleep(0.05)
+        time.sleep(0.1)
 
     return results
 
@@ -996,12 +1287,11 @@ def route_risk_analysis(
             "level": "unknown",
             "score": 0,
             "problems": [
-                "Weather information is unavailable for this route."
+                "Weather information is unavailable."
             ]
         }
 
     score = 0
-
     problems = []
 
     for point in route_weather:
@@ -1014,11 +1304,6 @@ def route_risk_analysis(
 
         rain = weather.get(
             "rain",
-            0
-        ) or 0
-
-        showers = weather.get(
-            "showers",
             0
         ) or 0
 
@@ -1060,15 +1345,7 @@ def route_risk_analysis(
                 f"Heavy rain possible near {point['name']}."
             )
 
-        elif (
-            code in {
-                51, 53, 55,
-                61, 63,
-                66, 80, 81
-            }
-            or rain > 0
-            or showers > 0
-        ):
+        elif is_rainy(weather):
 
             score += 2
 
@@ -1096,15 +1373,12 @@ def route_risk_analysis(
             )
 
     if score >= 8:
-
         level = "high"
 
     elif score >= 4:
-
         level = "medium"
 
     else:
-
         level = "low"
 
     problems = list(
@@ -1127,111 +1401,70 @@ def generate_travel_advice(
     destination_weather,
     route_weather,
     route,
-    route_risk
+    route_risk,
+    period
 ):
 
     advice = []
 
-    start_temp = (
-        start_weather.get(
-            "temperature"
+    if start_weather and is_rainy(
+        start_weather
+    ):
+
+        advice.append(
+            "☔ Rain is possible at your starting point. "
+            "Keep an umbrella or raincoat ready."
         )
-        if start_weather
-        else None
-    )
 
-    destination_temp = (
-        destination_weather.get(
-            "temperature"
+    if destination_weather and is_rainy(
+        destination_weather
+    ):
+
+        advice.append(
+            "☔ Rain is possible at your destination too. "
+            "Keep rain protection with you."
         )
-        if destination_weather
-        else None
-    )
-
-    if start_temp is not None:
-
-        if start_temp >= 33:
-
-            advice.append(
-                "☀️ Your starting location is hot. "
-                "Use sunscreen, sunglasses and carry water."
-            )
-
-        if (
-            start_weather.get(
-                "rain",
-                0
-            ) or 0
-        ) > 0:
-
-            advice.append(
-                "☔ Rain is currently possible at your "
-                "starting location. Carry an umbrella/raincoat."
-            )
-
-    if destination_temp is not None:
-
-        if destination_temp >= 33:
-
-            advice.append(
-                "🌡️ The destination is also warm/hot. "
-                "Prepare for heat after reaching there."
-            )
-
-        if (
-            destination_weather.get(
-                "rain",
-                0
-            ) or 0
-        ) > 0:
-
-            advice.append(
-                "☔ Rain is possible at the destination. "
-                "Keep rain protection with you."
-            )
 
     if route_risk["level"] == "high":
 
         advice.append(
-            "⚠️ The selected route contains significant "
-            "weather risks. Consider delaying the journey "
-            "or checking another available route."
+            "⚠️ Several route points have notable weather concerns. "
+            "Check conditions again before starting."
         )
 
     elif route_risk["level"] == "medium":
 
         advice.append(
-            "⚠️ Weather conditions change along this route. "
-            "Travel is possible, but extra caution is recommended."
+            "⚠️ Weather changes are present along the route. "
+            "Pay attention to local conditions during the journey."
         )
 
     else:
 
         advice.append(
             "✅ No major weather-related issue was detected "
-            "along the sampled route points."
+            "at the sampled route points."
         )
 
-    if route_risk["problems"]:
+    if period == "Night":
 
         advice.append(
-            "🗺️ The route has different weather conditions "
-            "at different points, so do not judge the entire "
-            "journey only from the start and destination weather."
+            "🌙 It is nighttime. Visibility may be lower, "
+            "so take extra care while travelling."
         )
 
     if route["distance_km"] <= 50:
 
         advice.append(
-            "🚗 This is a relatively short journey. "
-            "Check the live weather again before leaving."
+            "🛣️ This is a relatively short journey. "
+            "Check the latest weather before leaving."
         )
 
     else:
 
         advice.append(
             "🛣️ This is a longer journey. Weather can change "
-            "during the trip, so keep checking conditions."
+            "during the trip, so check conditions periodically."
         )
 
     return advice
@@ -1245,9 +1478,6 @@ def create_start_location_map(
     current_location=None
 ):
 
-    # Default map location
-    # India center
-
     if current_location:
 
         center_lat = current_location[
@@ -1258,7 +1488,7 @@ def create_start_location_map(
             "longitude"
         ]
 
-        zoom = 10
+        zoom = 12
 
     else:
 
@@ -1275,27 +1505,31 @@ def create_start_location_map(
         control_scale=True
     )
 
-    # Current/start marker
-
     if current_location:
 
+        lat = current_location[
+            "latitude"
+        ]
+
+        lon = current_location[
+            "longitude"
+        ]
+
         popup_text = (
-            f"<b>📍 Start Location</b><br>"
-            f"{current_location.get('name', 'Selected Location')}<br>"
+            f"<b>📍 Selected Location</b><br>"
+            f"{current_location.get('name', 'Location')}<br>"
             f"{current_location.get('state', '')}<br>"
             f"{current_location.get('country', '')}"
         )
 
+        # Main marker
+
         folium.Marker(
             [
-                current_location[
-                    "latitude"
-                ],
-                current_location[
-                    "longitude"
-                ]
+                lat,
+                lon
             ],
-            tooltip="📍 Start Location",
+            tooltip="📍 Selected Location",
             popup=folium.Popup(
                 popup_text,
                 max_width=300
@@ -1306,23 +1540,30 @@ def create_start_location_map(
             )
         ).add_to(m)
 
-    # Instruction
+        # Small surrounding zone
 
-    folium.Marker(
-        [
-            center_lat,
-            center_lon
-        ],
-        tooltip="Click anywhere on the map to select your start location",
-        icon=folium.DivIcon(
-            html="""
-            <div style="
-                font-size: 0px;
-            ">
-            </div>
-            """
-        )
-    ).add_to(m)
+        folium.Circle(
+            [
+                lat,
+                lon
+            ],
+            radius=2500,
+            color="#3388ff",
+            fill=True,
+            fill_opacity=0.12,
+            popup="📍 Your selected area"
+        ).add_to(m)
+
+        folium.CircleMarker(
+            [
+                lat,
+                lon
+            ],
+            radius=8,
+            color="#3388ff",
+            fill=True,
+            fill_opacity=0.9
+        ).add_to(m)
 
     return m
 
@@ -1386,18 +1627,8 @@ def create_route_map(
 
     for route in routes:
 
-        route_id = route["id"]
-
         selected = (
-            route_id == selected_route_id
-        )
-
-        line_weight = (
-            7 if selected else 4
-        )
-
-        line_opacity = (
-            0.95 if selected else 0.45
+            route["id"] == selected_route_id
         )
 
         folium.PolyLine(
@@ -1406,10 +1637,10 @@ def create_route_map(
                 for lon, lat
                 in route["geometry"]
             ],
-            weight=line_weight,
-            opacity=line_opacity,
+            weight=7 if selected else 4,
+            opacity=0.95 if selected else 0.35,
             tooltip=(
-                f"Route {route_id} | "
+                f"Route {route['id']} | "
                 f"{route['distance_km']:.1f} km"
             )
         ).add_to(m)
@@ -1434,7 +1665,7 @@ def create_route_map(
                     point["latitude"],
                     point["longitude"]
                 ],
-                radius=6,
+                radius=7,
                 popup=folium.Popup(
                     popup_text,
                     max_width=300
@@ -1463,14 +1694,6 @@ def display_weather_card(
 
         return
 
-    description = weather[
-        "description"
-    ]
-
-    icon = weather[
-        "icon"
-    ]
-
     st.markdown(
         f"""
         <div class="weather-card">
@@ -1478,11 +1701,11 @@ def display_weather_card(
         <h2>{title}</h2>
 
         <h1>
-            {icon}
+            {weather['icon']}
             {weather['temperature']} °C
         </h1>
 
-        <h3>{description}</h3>
+        <h3>{weather['description']}</h3>
 
         <p>
         📍 {location_name}
@@ -1496,28 +1719,24 @@ def display_weather_card(
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
-
         st.metric(
             "Feels Like",
             f"{weather['feels_like']} °C"
         )
 
     with c2:
-
         st.metric(
             "Humidity",
             f"{weather['humidity']} %"
         )
 
     with c3:
-
         st.metric(
             "Wind",
             f"{weather['wind_speed']} km/h"
         )
 
     with c4:
-
         st.metric(
             "UV Index",
             str(weather["uv_index"])
@@ -1525,207 +1744,228 @@ def display_weather_card(
 
 
 # ============================================================
-# APP HEADER
+# SAVE HISTORY
+# ============================================================
+
+def save_activity_history(
+    activity,
+    location,
+    weather,
+    advice,
+    destination=None,
+    route=None
+):
+
+    now = datetime.now()
+
+    record = {
+        "Date": now.strftime("%Y-%m-%d"),
+        "Time": now.strftime("%I:%M %p"),
+        "Activity": activity,
+        "Location": location.get(
+            "name",
+            "Unknown"
+        ) if location else "Unknown",
+
+        "State": location.get(
+            "state",
+            ""
+        ) if location else "",
+
+        "Destination": destination.get(
+            "name",
+            ""
+        ) if destination else "",
+
+        "Temperature": (
+            weather.get("temperature")
+            if weather
+            else ""
+        ),
+
+        "Weather": (
+            weather.get("description")
+            if weather
+            else ""
+        ),
+
+        "Rain": (
+            weather.get("rain")
+            if weather
+            else ""
+        ),
+
+        "Wind": (
+            weather.get("wind_speed")
+            if weather
+            else ""
+        ),
+
+        "Period": get_day_period()[0],
+
+        "Advice": " | ".join(advice),
+
+        "Route Distance KM": (
+            round(route["distance_km"], 1)
+            if route
+            else ""
+        )
+    }
+
+    st.session_state.history.insert(
+        0,
+        record
+    )
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
+with st.sidebar:
+
+    st.title("🌦️ Weather Agent")
+
+    st.caption(
+        "Your personal daily weather assistant"
+    )
+
+    st.divider()
+
+    menu = st.radio(
+        "Navigate",
+        [
+            "🏠 Home",
+            "🗺️ Location & Map",
+            "🤖 Personal Agent",
+            "🎯 My Activities",
+            "🛣️ Route Weather",
+            "📜 History",
+            "⚙️ Settings"
+        ]
+    )
+
+    st.divider()
+
+    current_time = get_local_time()
+
+    period, period_icon = get_day_period()
+
+    st.write(
+        f"{period_icon} **{period}**"
+    )
+
+    st.write(
+        f"🕐 {current_time.strftime('%I:%M %p')}"
+    )
+
+    st.write(
+        f"📅 {current_time.strftime('%d %B %Y')}"
+    )
+
+
+# ============================================================
+# HEADER
 # ============================================================
 
 st.markdown(
     '<div class="main-title">'
-    '🌦️ Weather Travel Agent'
+    '🌦️ Personal Weather Agent'
     '</div>',
     unsafe_allow_html=True
 )
 
 st.markdown(
     '<div class="sub-title">'
-    'Check your current weather, choose locations on the map, '
-    'plan routes and get practical travel advice.'
+    'Weather that understands your location, time and daily activity.'
     '</div>',
     unsafe_allow_html=True
 )
 
 
 # ============================================================
-# START LOCATION
+# LOCATION & MAP
 # ============================================================
 
-st.header(
-    "📍 Select Your Start Location"
-)
+if menu in [
+    "🏠 Home",
+    "🗺️ Location & Map"
+]:
 
-st.write(
-    "You can either use your device location "
-    "or click anywhere on the map."
-)
-
-
-# ============================================================
-# CURRENT LOCATION BUTTON
-# ============================================================
-
-location_col1, location_col2 = st.columns(
-    [1, 3]
-)
-
-with location_col1:
-
-    get_location_button = st.button(
-        "📍 Get My Current Location",
-        type="primary",
-        use_container_width=True
+    st.header(
+        "📍 Location & Map"
     )
 
+    st.write(
+        "Your map is ready from the beginning. "
+        "Use your current location, search for a place, "
+        "or simply click anywhere on the map."
+    )
 
-# ============================================================
-# GET DEVICE LOCATION
-# ============================================================
+    col1, col2 = st.columns(
+        [1, 2]
+    )
 
-if get_location_button:
+    with col1:
 
-    st.session_state.location_requested = True
+        get_location_button = st.button(
+            "📍 Use My Current Location",
+            type="primary",
+            use_container_width=True
+        )
 
-    with st.spinner(
-        "Getting your current location..."
-    ):
+    with col2:
 
-        location = get_browser_location()
+        st.caption(
+            "Browser location permission is required for automatic location."
+        )
 
-    if location:
+    # --------------------------------------------------------
+    # CURRENT LOCATION
+    # --------------------------------------------------------
 
-        if "error" in location:
+    if get_location_button:
 
-            error = location["error"]
+        with st.spinner(
+            "Getting your current location..."
+        ):
 
-            if error.get("code") == 1:
+            location = get_browser_location()
 
-                st.error(
-                    "Location permission was denied. "
-                    "Please allow location access in your browser "
-                    "and click the button again."
-                )
+        if location:
+
+            if "error" in location:
+
+                error = location["error"]
+
+                if error.get("code") == 1:
+
+                    st.error(
+                        "Location permission was denied. "
+                        "Allow location access in your browser "
+                        "and try again."
+                    )
+
+                else:
+
+                    st.error(
+                        "Unable to get your location."
+                    )
 
             else:
 
-                st.error(
-                    "Location error: "
-                    f"{error.get('message', 'Unknown error')}"
-                )
-
-        else:
-
-            current_location = create_start_location(
-                location["latitude"],
-                location["longitude"]
-            )
-
-            st.session_state.current_location = (
-                current_location
-            )
-
-            st.session_state.current_weather = (
-                get_point_weather(
-                    current_location["latitude"],
-                    current_location["longitude"]
-                )
-            )
-
-            # Reset route information
-
-            st.session_state.routes = []
-
-            st.session_state.selected_route = None
-
-            st.session_state.route_weather = []
-
-            st.session_state.last_route_key = None
-
-            st.rerun()
-
-    else:
-
-        st.info(
-            "The browser is waiting for location permission. "
-            "Please allow location access and click the button again."
-        )
-
-
-# ============================================================
-# INTERACTIVE START LOCATION MAP
-# ============================================================
-
-st.subheader(
-    "🗺️ Choose Start Location on Map"
-)
-
-st.caption(
-    "👉 Click anywhere on the map to select that location as your start point."
-)
-
-start_map = create_start_location_map(
-    st.session_state.current_location
-)
-
-map_result = st_folium(
-    start_map,
-    width=None,
-    height=550,
-    returned_objects=[
-        "last_clicked"
-    ],
-    key="start_location_map"
-)
-
-
-# ============================================================
-# HANDLE MAP CLICK
-# ============================================================
-
-if map_result:
-
-    clicked = map_result.get(
-        "last_clicked"
-    )
-
-    if clicked:
-
-        clicked_lat = clicked.get(
-            "lat"
-        )
-
-        clicked_lon = clicked.get(
-            "lng"
-        )
-
-        if (
-            clicked_lat is not None
-            and clicked_lon is not None
-        ):
-
-            clicked_key = (
-                round(clicked_lat, 6),
-                round(clicked_lon, 6)
-            )
-
-            if (
-                st.session_state.map_last_clicked
-                != clicked_key
-            ):
-
-                st.session_state.map_last_clicked = (
-                    clicked_key
-                )
-
                 with st.spinner(
-                    "Getting weather for selected location..."
+                    "Understanding your location..."
                 ):
 
-                    selected_location = create_start_location(
-                        clicked_lat,
-                        clicked_lon
+                    selected_location = create_location(
+                        location["latitude"],
+                        location["longitude"]
                     )
 
                     selected_weather = get_point_weather(
-                        clicked_lat,
-                        clicked_lon
+                        location["latitude"],
+                        location["longitude"]
                     )
 
                 st.session_state.current_location = (
@@ -1736,664 +1976,1381 @@ if map_result:
                     selected_weather
                 )
 
-                # Reset route data
-
                 st.session_state.routes = []
-
                 st.session_state.selected_route = None
-
                 st.session_state.route_weather = []
-
-                st.session_state.last_route_key = None
 
                 st.rerun()
 
-
-# ============================================================
-# SHOW SELECTED START LOCATION
-# ============================================================
-
-current_location = (
-    st.session_state.current_location
-)
-
-current_weather = (
-    st.session_state.current_weather
-)
-
-
-if current_location:
-
-    st.success(
-        "📍 Start location selected: "
-        f"**{current_location.get('name', 'Selected Location')}**"
-    )
-
-    st.caption(
-        f"Latitude: {current_location['latitude']:.6f} | "
-        f"Longitude: {current_location['longitude']:.6f}"
-    )
-
-
-# ============================================================
-# CURRENT WEATHER
-# ============================================================
-
-if (
-    current_location
-    and current_weather
-):
-
-    st.divider()
-
-    location_name = current_location.get(
-        "name",
-        "Current Location"
-    )
-
-    display_weather_card(
-        "🌍 Current Weather",
-        current_weather,
-        location_name
-    )
-
-    current_advice = generate_daily_advice(
-        current_weather
-    )
-
-    if current_advice["level"] == "danger":
-
-        st.markdown(
-            '<div class="danger-card">',
-            unsafe_allow_html=True
-        )
-
-    elif current_advice["level"] == "warning":
-
-        st.markdown(
-            '<div class="warning-card">',
-            unsafe_allow_html=True
-        )
-
-    else:
-
-        st.markdown(
-            '<div class="success-card">',
-            unsafe_allow_html=True
-        )
+    # --------------------------------------------------------
+    # SEARCH LOCATION
+    # --------------------------------------------------------
 
     st.subheader(
-        current_advice["title"]
+        "🔍 Search Location"
     )
 
-    for item in current_advice["items"]:
-
-        st.write(item)
-
-    st.markdown(
-        "</div>",
-        unsafe_allow_html=True
+    location_search = st.text_input(
+        "Search a city, town or village",
+        placeholder="Example: Mangalagiri"
     )
 
-else:
-
-    st.info(
-        "📍 Select a location from the map or click "
-        "**Get My Current Location**."
+    search_location_button = st.button(
+        "🔎 Search Location"
     )
 
+    if search_location_button:
 
-# ============================================================
-# DESTINATION
-# ============================================================
+        if not location_search.strip():
 
-st.divider()
-
-st.header(
-    "🎯 Plan Your Journey"
-)
-
-destination_input = st.text_input(
-    "Enter your destination",
-    placeholder="Example: Vijayawada"
-)
-
-search_destination = st.button(
-    "🔎 Find Destination"
-)
-
-
-# ============================================================
-# SEARCH DESTINATION
-# ============================================================
-
-if search_destination:
-
-    if not destination_input.strip():
-
-        st.warning(
-            "Please enter a destination."
-        )
-
-    else:
-
-        results = geocode_place(
-            destination_input.strip()
-        )
-
-        if not results:
-
-            st.error(
-                "Destination not found. "
-                "Try another city or place name."
+            st.warning(
+                "Please enter a location."
             )
 
         else:
 
-            st.session_state.destination_results = (
-                results
+            with st.spinner(
+                "Searching location..."
+            ):
+
+                results = geocode_place(
+                    location_search.strip()
+                )
+
+            if results:
+
+                st.session_state.search_location_results = (
+                    results
+                )
+
+            else:
+
+                st.error(
+                    "Location not found. Try another name."
+                )
+
+    search_results = (
+        st.session_state.search_location_results
+    )
+
+    if search_results:
+
+        labels = []
+
+        for item in search_results:
+
+            labels.append(
+                f"{item['name']}, "
+                f"{item['state']}, "
+                f"{item['country']}"
             )
 
-
-# ============================================================
-# DESTINATION SELECTION
-# ============================================================
-
-destination_results = (
-    st.session_state.destination_results
-)
-
-
-if destination_results:
-
-    options = []
-
-    for item in destination_results:
-
-        label = (
-            f"{item['name']}, "
-            f"{item['state']}, "
-            f"{item['country']}"
+        selected_label = st.selectbox(
+            "Select location",
+            labels
         )
 
-        options.append(
-            label
+        selected_index = labels.index(
+            selected_label
         )
 
-    selected_destination_label = st.selectbox(
-        "Select the correct destination",
-        options
-    )
-
-    selected_index = options.index(
-        selected_destination_label
-    )
-
-    selected_destination = (
-        destination_results[
-            selected_index
-        ]
-    )
-
-    if st.button(
-        "🎯 Set Destination",
-        type="primary"
-    ):
-
-        st.session_state.destination = (
-            selected_destination
+        selected_search_location = (
+            search_results[selected_index]
         )
 
-        st.session_state.routes = []
-
-        st.session_state.selected_route = None
-
-        st.session_state.route_weather = []
-
-        st.session_state.last_route_key = None
-
-        st.rerun()
-
-
-# ============================================================
-# DESTINATION WEATHER
-# ============================================================
-
-destination = (
-    st.session_state.destination
-)
-
-
-if (
-    destination
-    and current_location
-):
-
-    st.divider()
-
-    st.subheader(
-        f"🎯 Destination: {destination['name']}"
-    )
-
-    destination_weather = get_point_weather(
-        destination["latitude"],
-        destination["longitude"]
-    )
-
-    display_weather_card(
-        "🎯 Destination Weather",
-        destination_weather,
-        (
-            f"{destination['name']}, "
-            f"{destination.get('state', '')}, "
-            f"{destination.get('country', '')}"
-        )
-    )
-
-    destination_advice = generate_daily_advice(
-        destination_weather
-    )
-
-    st.markdown(
-        '<div class="advice-card">',
-        unsafe_allow_html=True
-    )
-
-    st.subheader(
-        "🧠 Destination Advice"
-    )
-
-    for item in destination_advice["items"]:
-
-        st.write(item)
-
-    st.markdown(
-        "</div>",
-        unsafe_allow_html=True
-    )
-
-    # ========================================================
-    # ROUTES
-    # ========================================================
-
-    st.divider()
-
-    st.header(
-        "🗺️ Possible Routes"
-    )
-
-    if st.button(
-        "🚗 Find Available Routes",
-        type="primary"
-    ):
-
-        with st.spinner(
-            "Finding possible routes..."
+        if st.button(
+            "📍 Use This Location",
+            type="primary"
         ):
 
-            routes = get_routes(
-                current_location[
-                    "latitude"
-                ],
-                current_location[
-                    "longitude"
-                ],
-                destination[
-                    "latitude"
-                ],
-                destination[
-                    "longitude"
-                ]
+            with st.spinner(
+                "Loading weather..."
+            ):
+
+                selected_location = create_location(
+                    selected_search_location[
+                        "latitude"
+                    ],
+                    selected_search_location[
+                        "longitude"
+                    ]
+                )
+
+                selected_weather = get_point_weather(
+                    selected_search_location[
+                        "latitude"
+                    ],
+                    selected_search_location[
+                        "longitude"
+                    ]
+                )
+
+            st.session_state.current_location = (
+                selected_location
             )
 
-        if not routes:
-
-            st.error(
-                "No route was found for this journey."
+            st.session_state.current_weather = (
+                selected_weather
             )
 
-        else:
-
-            st.session_state.routes = (
-                routes
-            )
-
-            st.session_state.selected_route = (
-                None
-            )
-
-            st.session_state.route_weather = (
-                []
-            )
-
-            st.session_state.last_route_key = (
-                None
-            )
+            st.session_state.routes = []
+            st.session_state.selected_route = None
+            st.session_state.route_weather = []
 
             st.rerun()
 
-
-# ============================================================
-# ROUTE LIST
-# ============================================================
-
-routes = (
-    st.session_state.routes
-)
-
-
-if routes:
+    # --------------------------------------------------------
+    # MAP
+    # --------------------------------------------------------
 
     st.subheader(
-        f"🛣️ {len(routes)} route option(s) found"
+        "🗺️ Interactive Map"
     )
 
     st.caption(
-        "Routes are shown with the shorter-distance route first. "
-        "Alternative routes depend on the routing service."
+        "Click anywhere on the map to make that point your location."
     )
 
-    route_labels = []
+    start_map = create_start_location_map(
+        st.session_state.current_location
+    )
 
-    for route in routes:
+    map_result = st_folium(
+        start_map,
+        width=None,
+        height=550,
+        returned_objects=[
+            "last_clicked"
+        ],
+        key="main_location_map"
+    )
 
-        route_labels.append(
-            f"Route {route['id']} — "
-            f"{route['distance_km']:.1f} km — "
-            f"{route['duration_min']:.0f} min"
+    # --------------------------------------------------------
+    # MAP CLICK
+    # --------------------------------------------------------
+
+    if map_result:
+
+        clicked = map_result.get(
+            "last_clicked"
         )
 
-    selected_route_label = st.radio(
-        "Which route do you want to analyse?",
-        route_labels,
-        index=0
+        if clicked:
+
+            lat = clicked.get("lat")
+            lon = clicked.get("lng")
+
+            if lat is not None and lon is not None:
+
+                clicked_key = (
+                    round(lat, 6),
+                    round(lon, 6)
+                )
+
+                if (
+                    st.session_state.map_last_clicked
+                    != clicked_key
+                ):
+
+                    st.session_state.map_last_clicked = (
+                        clicked_key
+                    )
+
+                    with st.spinner(
+                        "Understanding selected area..."
+                    ):
+
+                        selected_location = create_location(
+                            lat,
+                            lon
+                        )
+
+                        selected_weather = get_point_weather(
+                            lat,
+                            lon
+                        )
+
+                    st.session_state.current_location = (
+                        selected_location
+                    )
+
+                    st.session_state.current_weather = (
+                        selected_weather
+                    )
+
+                    st.rerun()
+
+    # --------------------------------------------------------
+    # LOCATION SUMMARY
+    # --------------------------------------------------------
+
+    current_location = (
+        st.session_state.current_location
     )
 
-    selected_route_index = (
-        route_labels.index(
-            selected_route_label
-        )
+    current_weather = (
+        st.session_state.current_weather
     )
 
-    selected_route = routes[
-        selected_route_index
-    ]
+    if current_location:
 
-    st.session_state.selected_route = (
-        selected_route
-    )
-
-    # ========================================================
-    # SELECTED ROUTE
-    # ========================================================
-
-    st.markdown(
-        f"""
-        <div class="route-card">
-
-        <h2>🛣️ Route {selected_route['id']}</h2>
-
-        <p>
-        📏 Distance:
-        <b>{selected_route['distance_km']:.1f} km</b>
-        </p>
-
-        <p>
-        ⏱️ Estimated travel time:
-        <b>{selected_route['duration_min']:.0f} minutes</b>
-        </p>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    analyze_button = st.button(
-        "🌦️ Analyze Weather Along This Route",
-        type="primary"
-    )
-
-    route_key = (
-        f"{selected_route['id']}_"
-        f"{selected_route['distance_km']:.2f}"
-    )
-
-    if analyze_button:
-
-        with st.spinner(
-            "Checking weather at multiple points along the selected route..."
-        ):
-
-            route_weather = analyze_route_weather(
-                selected_route,
-                current_location,
-                destination
-            )
-
-        st.session_state.route_weather = (
-            route_weather
+        st.success(
+            f"📍 **{current_location['name']}**"
         )
 
-        st.session_state.last_route_key = (
-            route_key
+        st.caption(
+            f"{current_location.get('state', '')}, "
+            f"{current_location.get('country', '')}"
         )
 
-        st.rerun()
-
-
-# ============================================================
-# ROUTE WEATHER RESULT
-# ============================================================
-
-selected_route = (
-    st.session_state.selected_route
-)
-
-route_weather = (
-    st.session_state.route_weather
-)
-
-
-if (
-    selected_route
-    and route_weather
-    and st.session_state.last_route_key
-):
-
-    st.divider()
-
-    st.header(
-        "🌦️ Weather Along Selected Route"
-    )
-
-    risk = route_risk_analysis(
-        route_weather
-    )
-
-    # ========================================================
-    # RISK SUMMARY
-    # ========================================================
-
-    if risk["level"] == "high":
-
-        st.markdown(
-            '<div class="danger-card">',
-            unsafe_allow_html=True
-        )
-
-        st.subheader(
-            "⚠️ Significant weather risk detected"
-        )
-
-    elif risk["level"] == "medium":
-
-        st.markdown(
-            '<div class="warning-card">',
-            unsafe_allow_html=True
-        )
-
-        st.subheader(
-            "⚠️ Weather changes detected along the route"
+        display_weather_card(
+            "🌍 Current Weather",
+            current_weather,
+            current_location["name"]
         )
 
     else:
 
-        st.markdown(
-            '<div class="success-card">',
-            unsafe_allow_html=True
+        st.info(
+            "📍 Select your current location using the button, "
+            "search, or map."
         )
 
-        st.subheader(
-            "✅ No major weather risk detected"
+
+# ============================================================
+# HOME
+# ============================================================
+
+if menu == "🏠 Home":
+
+    current_location = (
+        st.session_state.current_location
+    )
+
+    current_weather = (
+        st.session_state.current_weather
+    )
+
+    if current_location and current_weather:
+
+        st.divider()
+
+        period, period_icon = get_day_period()
+
+        st.header(
+            f"{period_icon} Good {period.lower()}!"
         )
-
-    if risk["problems"]:
-
-        for problem in risk["problems"]:
-
-            st.write(
-                f"• {problem}"
-            )
-
-    else:
 
         st.write(
-            "Weather conditions look generally stable "
-            "along the sampled route points."
+            f"You're currently around **{current_location['name']}**."
         )
 
-    st.markdown(
-        "</div>",
-        unsafe_allow_html=True
-    )
+        # ----------------------------------------------------
+        # QUICK ACTIVITY
+        # ----------------------------------------------------
 
-    # ========================================================
-    # ROUTE POINT WEATHER
-    # ========================================================
+        st.subheader(
+            "🎯 What are you doing?"
+        )
 
-    st.subheader(
-        "📍 Weather at Journey Points"
-    )
+        activity = st.selectbox(
+            "Choose an activity",
+            st.session_state.preferences,
+            index=0
+        )
 
-    for point in route_weather:
+        st.session_state.activity = activity
 
-        weather = point["weather"]
+        # ----------------------------------------------------
+        # ADVICE
+        # ----------------------------------------------------
 
-        with st.expander(
-            f"{weather['icon']} "
-            f"{point['name']} — "
-            f"{weather['temperature']} °C — "
-            f"{weather['description']}"
-        ):
-
-            c1, c2, c3, c4 = st.columns(4)
-
-            with c1:
-
-                st.metric(
-                    "Temperature",
-                    f"{weather['temperature']} °C"
-                )
-
-            with c2:
-
-                st.metric(
-                    "Rain",
-                    f"{weather['rain']} mm"
-                )
-
-            with c3:
-
-                st.metric(
-                    "Wind",
-                    f"{weather['wind_speed']} km/h"
-                )
-
-            with c4:
-
-                st.metric(
-                    "Humidity",
-                    f"{weather['humidity']} %"
-                )
-
-    # ========================================================
-    # TRAVEL ADVICE
-    # ========================================================
-
-    st.divider()
-
-    st.header(
-        "🤖 Smart Travel Advice"
-    )
-
-    start_weather = (
-        current_weather
-    )
-
-    destination_weather = get_point_weather(
-        destination["latitude"],
-        destination["longitude"]
-    )
-
-    travel_advice = generate_travel_advice(
-        start_weather,
-        destination_weather,
-        route_weather,
-        selected_route,
-        risk
-    )
-
-    for advice in travel_advice:
+        advice = generate_activity_advice(
+            current_weather,
+            activity,
+            period
+        )
 
         st.markdown(
-            f"""
-            <div class="advice-card">
-            {advice}
-            </div>
-            """,
+            '<div class="agent-card">',
             unsafe_allow_html=True
         )
 
-    # ========================================================
-    # ROUTE MAP
-    # ========================================================
+        st.subheader(
+            f"🤖 Your advice for {activity}"
+        )
 
-    st.divider()
+        for item in advice:
+
+            st.write(
+                item
+            )
+
+        st.markdown(
+            "</div>",
+            unsafe_allow_html=True
+        )
+
+        # ----------------------------------------------------
+        # NOTIFICATIONS
+        # ----------------------------------------------------
+
+        notifications = generate_notifications(
+            current_weather,
+            activity,
+            current_location["name"],
+            period
+        )
+
+        if notifications:
+
+            st.subheader(
+                "🔔 Notifications"
+            )
+
+            for notification in notifications:
+
+                if notification["type"] == "danger":
+
+                    st.error(
+                        f"{notification['title']}\n\n"
+                        f"{notification['message']}"
+                    )
+
+                elif notification["type"] == "warning":
+
+                    st.warning(
+                        f"{notification['title']}\n\n"
+                        f"{notification['message']}"
+                    )
+
+                else:
+
+                    st.info(
+                        f"{notification['title']}\n\n"
+                        f"{notification['message']}"
+                    )
+
+        # ----------------------------------------------------
+        # START AGENT
+        # ----------------------------------------------------
+
+        st.divider()
+
+        if st.button(
+            "🤖 Talk to My Personal Agent",
+            type="primary"
+        ):
+
+            st.session_state.agent_started = True
+            st.session_state.agent_finished = False
+
+            st.session_state.agent_messages = [
+                {
+                    "role": "agent",
+                    "message": (
+                        f"Hey 👋 I can help you with your "
+                        f"{activity.lower()} plan."
+                    )
+                },
+                {
+                    "role": "agent",
+                    "message": (
+                        f"It's currently {period.lower()} "
+                        f"around {current_location['name']}."
+                    )
+                },
+                {
+                    "role": "agent",
+                    "message": (
+                        "I'll look at the weather and give you "
+                        "simple practical advice."
+                    )
+                }
+            ]
+
+            st.rerun()
+
+    else:
+
+        st.info(
+            "First select a location. Then I'll become your "
+            "personal weather assistant."
+        )
+
+
+# ============================================================
+# PERSONAL AGENT
+# ============================================================
+
+if menu == "🤖 Personal Agent":
 
     st.header(
-        "🗺️ Selected Route + Weather Points"
+        "🤖 Personal Mini Agent"
     )
 
-    route_map = create_route_map(
-        current_location,
-        destination,
-        routes,
-        selected_route_id=selected_route["id"],
-        route_weather=route_weather
+    current_location = (
+        st.session_state.current_location
     )
 
-    st_folium(
-        route_map,
-        width=None,
-        height=600,
-        returned_objects=[],
-        key="route_analysis_map"
+    current_weather = (
+        st.session_state.current_weather
     )
+
+    if not current_location:
+
+        st.warning(
+            "Please select your location first."
+        )
+
+    else:
+
+        period, period_icon = get_day_period()
+
+        activity = st.selectbox(
+            "What are you doing?",
+            st.session_state.preferences,
+            index=0
+        )
+
+        st.session_state.activity = activity
+
+        st.markdown(
+            '<div class="agent-card">',
+            unsafe_allow_html=True
+        )
+
+        st.write(
+            f"📍 Location: **{current_location['name']}**"
+        )
+
+        st.write(
+            f"{period_icon} Time: **{period}**"
+        )
+
+        st.write(
+            f"🎯 Activity: **{activity}**"
+        )
+
+        st.markdown(
+            "</div>",
+            unsafe_allow_html=True
+        )
+
+        # ----------------------------------------------------
+        # START
+        # ----------------------------------------------------
+
+        if not st.session_state.agent_started:
+
+            if st.button(
+                "🤖 Start Conversation",
+                type="primary"
+            ):
+
+                st.session_state.agent_started = True
+                st.session_state.agent_finished = False
+
+                st.session_state.agent_messages = [
+                    {
+                        "role": "agent",
+                        "message": (
+                            f"Hey 😊 You're going for "
+                            f"{activity.lower()}, right?"
+                        )
+                    },
+                    {
+                        "role": "agent",
+                        "message": (
+                            f"I checked the weather around "
+                            f"{current_location['name']}."
+                        )
+                    }
+                ]
+
+                st.rerun()
+
+        else:
+
+            # ------------------------------------------------
+            # DISPLAY CHAT
+            # ------------------------------------------------
+
+            for message in (
+                st.session_state.agent_messages
+            ):
+
+                if message["role"] == "agent":
+
+                    st.markdown(
+                        f"""
+                        <div class="chat-agent">
+                        🤖 <b>Agent</b><br>
+                        {message["message"]}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                else:
+
+                    st.markdown(
+                        f"""
+                        <div class="chat-user">
+                        👤 <b>You</b><br>
+                        {message["message"]}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+            # ------------------------------------------------
+            # OPTIONAL USER MESSAGE
+            # ------------------------------------------------
+
+            user_message = st.text_input(
+                "Talk to your agent",
+                placeholder="Example: I am leaving at 6 PM..."
+            )
+
+            send_message = st.button(
+                "💬 Send"
+            )
+
+            if send_message and user_message.strip():
+
+                st.session_state.agent_messages.append(
+                    {
+                        "role": "user",
+                        "message": user_message.strip()
+                    }
+                )
+
+                advice = generate_activity_advice(
+                    current_weather,
+                    activity,
+                    period
+                )
+
+                response = (
+                    f"Got it 😊 Since you're doing "
+                    f"{activity.lower()}, here is what I'd suggest:<br><br>"
+                    + "<br>".join(advice)
+                )
+
+                st.session_state.agent_messages.append(
+                    {
+                        "role": "agent",
+                        "message": response
+                    }
+                )
+
+                st.rerun()
+
+            # ------------------------------------------------
+            # FINISH
+            # ------------------------------------------------
+
+            st.divider()
+
+            finish = st.button(
+                "✅ Finish & Save Activity",
+                type="primary"
+            )
+
+            if finish:
+
+                advice = generate_activity_advice(
+                    current_weather,
+                    activity,
+                    period
+                )
+
+                save_activity_history(
+                    activity,
+                    current_location,
+                    current_weather,
+                    advice
+                )
+
+                st.session_state.agent_finished = True
+                st.session_state.agent_started = False
+                st.session_state.agent_messages = []
+
+                st.success(
+                    "✅ Activity finished and saved to History."
+                )
 
 
 # ============================================================
-# ROUTE CHANGE MESSAGE
+# MY ACTIVITIES
 # ============================================================
 
-if routes and selected_route:
+if menu == "🎯 My Activities":
+
+    st.header(
+        "🎯 My Activities"
+    )
+
+    st.write(
+        "Everyone has different daily routines. "
+        "Choose the activities you want to keep."
+    )
+
+    all_activities = [
+        "🎓 College",
+        "🚶 Walking",
+        "🛍️ Shopping",
+        "🏠 Small Work",
+        "🏍️ Bike",
+        "🚗 Car",
+        "🚌 Bus",
+        "🎬 Movie",
+        "🍴 Restaurant",
+        "🌳 Outdoor",
+        "🧳 Traveling"
+    ]
+
+    selected_preferences = st.multiselect(
+        "Select your activities",
+        all_activities,
+        default=[
+            x for x in all_activities
+            if x in st.session_state.preferences
+        ]
+    )
+
+    custom_activity = st.text_input(
+        "➕ Add your own activity",
+        placeholder="Example: Temple, Gym, Library..."
+    )
+
+    if custom_activity.strip():
+
+        custom_name = (
+            "✨ " + custom_activity.strip()
+        )
+
+        if custom_name not in selected_preferences:
+
+            selected_preferences.append(
+                custom_name
+            )
+
+    if st.button(
+        "💾 Save My Activities",
+        type="primary"
+    ):
+
+        if not selected_preferences:
+
+            st.warning(
+                "Please select at least one activity."
+            )
+
+        else:
+
+            st.session_state.preferences = (
+                selected_preferences
+            )
+
+            st.success(
+                "✅ Your personal activities have been saved."
+            )
 
     st.divider()
 
-    st.info(
-        "🔄 Select another route above and click "
-        "**Analyze Weather Along This Route** again. "
-        "The agent will analyse that route separately."
+    st.subheader(
+        "Your current activities"
     )
+
+    for activity in st.session_state.preferences:
+
+        st.write(
+            f"• {activity}"
+        )
+
+
+# ============================================================
+# ROUTE WEATHER
+# ============================================================
+
+if menu == "🛣️ Route Weather":
+
+    st.header(
+        "🛣️ Traveling & Route Weather"
+    )
+
+    current_location = (
+        st.session_state.current_location
+    )
+
+    if not current_location:
+
+        st.warning(
+            "First select your starting location."
+        )
+
+    else:
+
+        st.success(
+            f"📍 Starting from **{current_location['name']}**"
+        )
+
+        st.subheader(
+            "🎯 Where are you going?"
+        )
+
+        destination_input = st.text_input(
+            "Search destination",
+            placeholder="Example: Vijayawada"
+        )
+
+        search_destination = st.button(
+            "🔎 Search Destination"
+        )
+
+        if search_destination:
+
+            if not destination_input.strip():
+
+                st.warning(
+                    "Please enter a destination."
+                )
+
+            else:
+
+                with st.spinner(
+                    "Searching destination..."
+                ):
+
+                    results = geocode_place(
+                        destination_input.strip()
+                    )
+
+                if results:
+
+                    st.session_state.destination_results = (
+                        results
+                    )
+
+                else:
+
+                    st.error(
+                        "Destination not found."
+                    )
+
+        destination_results = (
+            st.session_state.destination_results
+        )
+
+        if destination_results:
+
+            labels = []
+
+            for item in destination_results:
+
+                labels.append(
+                    f"{item['name']}, "
+                    f"{item['state']}, "
+                    f"{item['country']}"
+                )
+
+            destination_label = st.selectbox(
+                "Select destination",
+                labels
+            )
+
+            index = labels.index(
+                destination_label
+            )
+
+            selected_destination = (
+                destination_results[index]
+            )
+
+            if st.button(
+                "🎯 Set Destination",
+                type="primary"
+            ):
+
+                st.session_state.destination = (
+                    selected_destination
+                )
+
+                st.session_state.routes = []
+                st.session_state.route_weather = []
+                st.session_state.selected_route = None
+
+                st.rerun()
+
+        destination = (
+            st.session_state.destination
+        )
+
+        if destination:
+
+            st.divider()
+
+            st.subheader(
+                f"🎯 {destination['name']}"
+            )
+
+            destination_weather = get_point_weather(
+                destination["latitude"],
+                destination["longitude"]
+            )
+
+            display_weather_card(
+                "🎯 Destination Weather",
+                destination_weather,
+                (
+                    f"{destination['name']}, "
+                    f"{destination.get('state', '')}"
+                )
+            )
+
+            st.subheader(
+                "🚗 Choose travel mode"
+            )
+
+            travel_mode_display = st.selectbox(
+                "How are you travelling?",
+                [
+                    "🚗 Car",
+                    "🏍️ Bike",
+                    "🚌 Bus"
+                ]
+            )
+
+            if "Bike" in travel_mode_display:
+
+                st.session_state.travel_mode = "driving"
+
+            elif "Bus" in travel_mode_display:
+
+                st.session_state.travel_mode = "driving"
+
+            else:
+
+                st.session_state.travel_mode = "driving"
+
+            if st.button(
+                "🛣️ Find Routes",
+                type="primary"
+            ):
+
+                with st.spinner(
+                    "Finding routes..."
+                ):
+
+                    routes = get_routes(
+                        current_location["latitude"],
+                        current_location["longitude"],
+                        destination["latitude"],
+                        destination["longitude"],
+                        st.session_state.travel_mode
+                    )
+
+                if routes:
+
+                    st.session_state.routes = routes
+                    st.session_state.selected_route = routes[0]
+                    st.session_state.route_weather = []
+
+                    st.rerun()
+
+                else:
+
+                    st.error(
+                        "No route could be found."
+                    )
+
+        routes = (
+            st.session_state.routes
+        )
+
+        if routes:
+
+            st.divider()
+
+            st.subheader(
+                f"🛣️ {len(routes)} route option(s)"
+            )
+
+            route_labels = []
+
+            for route in routes:
+
+                route_labels.append(
+                    f"Route {route['id']} — "
+                    f"{route['distance_km']:.1f} km — "
+                    f"{route['duration_min']:.0f} min"
+                )
+
+            selected_route_label = st.radio(
+                "Select a route",
+                route_labels,
+                index=0
+            )
+
+            selected_index = route_labels.index(
+                selected_route_label
+            )
+
+            selected_route = routes[
+                selected_index
+            ]
+
+            st.session_state.selected_route = (
+                selected_route
+            )
+
+            st.markdown(
+                f"""
+                <div class="route-card">
+
+                <h3>🛣️ Route {selected_route['id']}</h3>
+
+                <p>
+                📏 Distance:
+                <b>{selected_route['distance_km']:.1f} km</b>
+                </p>
+
+                <p>
+                ⏱️ Time:
+                <b>{selected_route['duration_min']:.0f} minutes</b>
+                </p>
+
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            if st.button(
+                "🌦️ Analyze Route Weather",
+                type="primary"
+            ):
+
+                with st.spinner(
+                    "Checking weather along the route..."
+                ):
+
+                    route_weather = analyze_route_weather(
+                        selected_route,
+                        current_location,
+                        destination
+                    )
+
+                st.session_state.route_weather = (
+                    route_weather
+                )
+
+                st.rerun()
+
+        route_weather = (
+            st.session_state.route_weather
+        )
+
+        if route_weather and destination:
+
+            st.divider()
+
+            st.header(
+                "📍 Places Along Your Route"
+            )
+
+            for point in route_weather:
+
+                weather = point["weather"]
+
+                st.markdown(
+                    f"""
+                    <div class="small-place">
+                    <b>📍 {point['name']}</b><br>
+                    {weather['icon']}
+                    {weather['temperature']} °C —
+                    {weather['description']}<br>
+                    🌧️ Rain: {weather['rain']} mm
+                    &nbsp;&nbsp;
+                    💨 Wind: {weather['wind_speed']} km/h
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            # ------------------------------------------------
+            # RISK
+            # ------------------------------------------------
+
+            risk = route_risk_analysis(
+                route_weather
+            )
+
+            st.subheader(
+                "🔔 Route Notifications"
+            )
+
+            if risk["problems"]:
+
+                for problem in risk["problems"]:
+
+                    st.warning(
+                        f"🔔 {problem}"
+                    )
+
+            else:
+
+                st.success(
+                    "✅ No major weather notification "
+                    "was generated for the sampled route."
+                )
+
+            # ------------------------------------------------
+            # TRAVEL ADVICE
+            # ------------------------------------------------
+
+            period, _ = get_day_period()
+
+            travel_advice = generate_travel_advice(
+                current_weather,
+                destination_weather,
+                route_weather,
+                selected_route,
+                risk,
+                period
+            )
+
+            st.subheader(
+                "🤖 Personal Travel Advice"
+            )
+
+            for advice in travel_advice:
+
+                st.markdown(
+                    f"""
+                    <div class="advice-card">
+                    {advice}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            # ------------------------------------------------
+            # SAVE TRAVEL
+            # ------------------------------------------------
+
+            if st.button(
+                "✅ Finish Travel & Save"
+            ):
+
+                save_activity_history(
+                    "🧳 Traveling",
+                    current_location,
+                    current_weather,
+                    travel_advice,
+                    destination,
+                    selected_route
+                )
+
+                st.success(
+                    "✅ Travel activity saved to History."
+                )
+
+            # ------------------------------------------------
+            # ROUTE MAP
+            # ------------------------------------------------
+
+            st.divider()
+
+            st.subheader(
+                "🗺️ Route + Weather Map"
+            )
+
+            route_map = create_route_map(
+                current_location,
+                destination,
+                routes,
+                selected_route_id=selected_route["id"],
+                route_weather=route_weather
+            )
+
+            st_folium(
+                route_map,
+                width=None,
+                height=600,
+                returned_objects=[],
+                key="travel_route_map"
+            )
+
+
+# ============================================================
+# HISTORY
+# ============================================================
+
+if menu == "📜 History":
+
+    st.header(
+        "📜 Activity History"
+    )
+
+    history = st.session_state.history
+
+    if not history:
+
+        st.info(
+            "No activities have been saved yet."
+        )
+
+    else:
+
+        df = pd.DataFrame(
+            history
+        )
+
+        # ----------------------------------------------------
+        # SEARCH
+        # ----------------------------------------------------
+
+        search_history = st.text_input(
+            "🔎 Search history",
+            placeholder="Search activity, place, destination..."
+        )
+
+        if search_history.strip():
+
+            search_text = (
+                search_history.strip().lower()
+            )
+
+            mask = (
+                df.astype(str)
+                .apply(
+                    lambda col: col.str.lower().str.contains(
+                        search_text,
+                        na=False
+                    )
+                )
+                .any(axis=1)
+            )
+
+            filtered_df = df[
+                mask
+            ]
+
+        else:
+
+            filtered_df = df
+
+        # ----------------------------------------------------
+        # DATE FILTER
+        # ----------------------------------------------------
+
+        available_dates = sorted(
+            df["Date"].unique(),
+            reverse=True
+        )
+
+        selected_date = st.selectbox(
+            "📅 Filter by date",
+            ["All Dates"] + available_dates
+        )
+
+        if selected_date != "All Dates":
+
+            filtered_df = filtered_df[
+                filtered_df["Date"]
+                == selected_date
+            ]
+
+        st.write(
+            f"Showing **{len(filtered_df)}** activity record(s)."
+        )
+
+        # ----------------------------------------------------
+        # RECORDS
+        # ----------------------------------------------------
+
+        for _, row in filtered_df.iterrows():
+
+            with st.expander(
+                f"{row['Date']} {row['Time']} — "
+                f"{row['Activity']} — "
+                f"{row['Location']}"
+            ):
+
+                st.write(
+                    f"📍 **Location:** {row['Location']}"
+                )
+
+                if row["Destination"]:
+
+                    st.write(
+                        f"🎯 **Destination:** {row['Destination']}"
+                    )
+
+                st.write(
+                    f"🌦️ **Weather:** {row['Weather']}"
+                )
+
+                st.write(
+                    f"🌡️ **Temperature:** {row['Temperature']} °C"
+                )
+
+                st.write(
+                    f"🌧️ **Rain:** {row['Rain']} mm"
+                )
+
+                st.write(
+                    f"💨 **Wind:** {row['Wind']} km/h"
+                )
+
+                st.write(
+                    f"🕐 **Period:** {row['Period']}"
+                )
+
+                if row["Route Distance KM"] != "":
+
+                    st.write(
+                        f"🛣️ **Route:** "
+                        f"{row['Route Distance KM']} km"
+                    )
+
+                st.write(
+                    "🤖 **Advice:**"
+                )
+
+                st.write(
+                    row["Advice"]
+                )
+
+        # ----------------------------------------------------
+        # DOWNLOAD
+        # ----------------------------------------------------
+
+        st.divider()
+
+        csv_data = filtered_df.to_csv(
+            index=False
+        ).encode(
+            "utf-8"
+        )
+
+        st.download_button(
+            "⬇️ Download History",
+            data=csv_data,
+            file_name="weather_agent_history.csv",
+            mime="text/csv",
+            type="primary"
+        )
+
+        # ----------------------------------------------------
+        # CLEAR
+        # ----------------------------------------------------
+
+        st.divider()
+
+        st.subheader(
+            "🗑️ Clear History"
+        )
+
+        confirm_clear = st.checkbox(
+            "I understand that clearing history will remove all saved activities."
+        )
+
+        if st.button(
+            "🗑️ Clear All History"
+        ):
+
+            if confirm_clear:
+
+                st.session_state.history = []
+
+                st.success(
+                    "✅ History cleared."
+                )
+
+                st.rerun()
+
+            else:
+
+                st.warning(
+                    "Please confirm before clearing history."
+                )
+
+
+# ============================================================
+# SETTINGS
+# ============================================================
+
+if menu == "⚙️ Settings":
+
+    st.header(
+        "⚙️ Settings"
+    )
+
+    st.subheader(
+        "👤 Personal Activities"
+    )
+
+    st.write(
+        "Choose the activities you want your personal agent to show."
+    )
+
+    for activity in st.session_state.preferences:
+
+        st.write(
+            f"✅ {activity}"
+        )
+
+    st.divider()
+
+    st.subheader(
+        "🔔 Notification System"
+    )
+
+    st.info(
+        "The agent creates relevant in-app notifications "
+        "based on weather, location, time and activity."
+    )
+
+    st.divider()
+
+    st.subheader(
+        "🕐 Time Awareness"
+    )
+
+    period, icon = get_day_period()
+
+    st.write(
+        f"Current period: {icon} **{period}**"
+    )
+
+    st.write(
+        f"Current time: **{datetime.now().strftime('%I:%M %p')}**"
+    )
+
+    st.divider()
+
+    st.subheader(
+        "🗑️ Data"
+    )
+
+    st.write(
+        f"Saved activities: **{len(st.session_state.history)}**"
+    )
+
+    if st.button(
+        "🧹 Reset Agent Conversation"
+    ):
+
+        st.session_state.agent_messages = []
+        st.session_state.agent_started = False
+        st.session_state.agent_finished = False
+
+        st.success(
+            "Conversation reset."
+        )
 
 
 # ============================================================
@@ -2403,7 +3360,7 @@ if routes and selected_route:
 st.divider()
 
 st.caption(
-    "🌦️ Weather Travel Agent | "
-    "Current location, interactive map, destination weather, "
-    "route analysis and practical travel assistance."
+    "🌦️ Personal Weather Agent | "
+    "Location • Weather • Activities • Personal Advice • "
+    "Travel Routes • Notifications • History"
 )
